@@ -23,13 +23,13 @@
 #include <glm/gtx/hash.hpp>
 
 #pragma region Constants
-const int MAX_FRAMES_IN_FLIGHT = 2;
+const int MAX_FRAMES_IN_FLIGHT = 1;
 const int WIDTH = 800;
 const int HEIGHT = 600;
 const std::string MODEL_PATH = "models/chalet.obj";
 const std::string TEXTURE_PATH = "textures/chalet.jpg";
 const VkBool32 WIREFRAME = VK_FALSE;
-const VkClearColorValue CLEAR_COLOUR = { 0.7f, 0.1f, 0.25f, 1.0f };
+const VkClearColorValue CLEAR_COLOUR = { 0.7f, 0.3f, 0.25f, 1.0f };
 #pragma endregion
 
 #pragma region Validation Layers
@@ -71,6 +71,24 @@ struct SwapChainSupportDetails
 	VkSurfaceCapabilitiesKHR capabilities;
 	std::vector<VkSurfaceFormatKHR> formats;
 	std::vector<VkPresentModeKHR> presentModes;
+};
+#pragma endregion
+
+#pragma region Frame Buffers
+struct FrameBufferAttachment
+{
+	VkImage image;
+	VkImageView imageView;
+	VmaAllocation imageMemory;
+	VkFormat format;
+};
+
+struct FrameBuffer
+{
+	uint32_t width, height;
+	VkFramebuffer frameBuffer;
+	FrameBufferAttachment position, normal, colour, depth;
+	VkRenderPass renderPass;
 };
 #pragma endregion
 

@@ -846,7 +846,7 @@ void VulkanApplication::CreateRenderPass()
 	colourAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // The layout of the image before the render pass begins (undefined, we don't care what previous layout the image was in)
 	colourAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // The layout to automatically transition to when the render pass finishes. (Present. We want to present the image to the swap chain after rendering)
 
-																	// Create depth attachment
+	// Create depth attachment
 	VkAttachmentDescription depthAttachment = {};
 	depthAttachment.format = FindDepthFormat();
 	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
