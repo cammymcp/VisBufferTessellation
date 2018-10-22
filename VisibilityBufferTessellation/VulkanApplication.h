@@ -82,10 +82,8 @@ struct FrameBufferAttachment
 	VmaAllocation imageMemory;
 	VkFormat format;
 };
-
 struct FrameBuffer
 {
-	uint32_t width, height;
 	VkFramebuffer frameBuffer;
 	FrameBufferAttachment position, normal, colour, depth;
 	VkRenderPass renderPass;
@@ -151,7 +149,7 @@ namespace std
 }
 #pragma endregion
 
-#pragma region Descriptors
+#pragma region Uniform Buffers
 struct UniformBufferObject
 {
 	glm::mat4 model;
@@ -213,14 +211,18 @@ private:
 #pragma endregion
 
 #pragma region Graphics Pipeline Functions
-	void CreateGraphicsPipeline();
-	void CreatePipelineLayout();
-	void CreateRenderPass();
+	void CreateGraphicsPipelines();
+	void CreatePipelineCache();
+	void CreatePipelineLayouts();
+	VkPipelineColorBlendAttachmentState CreatePipelineColorBlendAttachmentState(VkColorComponentFlags colorWriteMask, VkBool32 blendEnable);
+	void CreateGeometryRenderPass();
+	void CreateDeferredRenderPass();
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 #pragma endregion
 
 #pragma region Drawing Functions
 	void CreateFrameBuffers();
+	void CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, FrameBufferAttachment* attachment);
 	void DrawFrame();
 	void CreateSynchronisationObjects();
 #pragma endregion
@@ -242,7 +244,8 @@ private:
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
 	void CreateUniformBuffers();
-	void UpdateUniformBuffer(uint32_t currentImage);
+	void UpdateDeferredUniformBuffer(uint32_t currentImage);
+	void UpdateGeometryUniformBuffer();
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage allocUsage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VmaAllocation& allocation);
 	void CreateVmaAllocator();
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
@@ -252,6 +255,7 @@ private:
 	void CreateTextureImage();
 	void CreateTextureImageView();
 	void CreateTextureSampler();
+	void CreateGBufferSampler();
 	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkMemoryPropertyFlags properties, VkImage& image, VmaAllocation& allocation);
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout srcLayout, VkImageLayout dstLayout); 
 	void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
@@ -301,9 +305,10 @@ private:
 #pragma endregion
 
 #pragma region Graphics Pipeline Objects
-	VkPipeline graphicsPipeline;
-	VkPipelineLayout pipelineLayout;
-	VkRenderPass renderPass;
+	VkPipeline deferredPipeline;
+	VkPipelineCache pipelineCache;
+	VkPipelineLayout deferredPipelineLayout;
+	VkRenderPass deferredRenderPass;
 #pragma endregion
 
 #pragma region Drawing Objects
@@ -318,12 +323,6 @@ private:
 #pragma region Command Buffer Objects
 	std::vector<VkCommandBuffer> commandBuffers;
 	VkCommandPool commandPool;
-#pragma endregion
-
-#pragma region Depth Buffer Objects
-	VkImage depthImage;
-	VmaAllocation depthImageMemory;
-	VkImageView depthImageView;
 #pragma endregion
 
 #pragma region Buffer Objects
@@ -351,7 +350,19 @@ private:
 #pragma region Descriptor Objects
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
-	std::vector<VkDescriptorSet> descriptorSets;
+	std::vector<VkDescriptorSet> deferredDescriptorSets;
+	VkDescriptorSet geometryDescriptorSet;
+#pragma endregion
+
+#pragma region Deferred Rendering Objects
+	VkPipeline geometryPipeline;
+	VkPipelineLayout geometryPipelineLayout;
+	VkBuffer geometryUniformBuffer;
+	VmaAllocation geometryUniformBufferAllocation;
+	FrameBuffer gBuffer;
+	VkSampler gBufferSampler;
+	VkSemaphore geometryPassSemapohore;
+	VkCommandBuffer geometryCommandBuffer;
 #pragma endregion
 };
 
