@@ -76,6 +76,8 @@ void VulkanApplication::CleanUp()
 	vmaDestroyImage(allocator, gBuffer.colour.image, gBuffer.colour.imageMemory);
 	vkDestroyImageView(device, gBuffer.depth.imageView, nullptr);
 	vmaDestroyImage(allocator, gBuffer.depth.image, gBuffer.depth.imageMemory);
+	vkDestroyImageView(device, textureImageView, nullptr);
+	vmaDestroyImage(allocator, textureImage, textureImageMemory);
 
 	// Destroy Descriptor Pool
 	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
