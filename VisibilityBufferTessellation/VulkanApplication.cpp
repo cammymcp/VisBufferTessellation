@@ -39,6 +39,7 @@ void VulkanApplication::InitVulkan()
 	CreateTextureImage();
 	CreateTextureImageView();
 	CreateTextureSampler();
+	CreateGBufferSampler();
 	LoadModel();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
@@ -46,7 +47,8 @@ void VulkanApplication::InitVulkan()
 	CreateDescriptorPool();
 	CreateFrameBuffers();
 	CreateDescriptorSets();
-	AllocateCommandBuffers();
+	AllocateDeferredCommandBuffers();
+	AllocateGeometryCommandBuffer();
 	CreateSynchronisationObjects();
 }
 
@@ -68,14 +70,13 @@ void VulkanApplication::CleanUp()
 
 	// Destroy texture objects
 	vkDestroySampler(device, textureSampler, nullptr);
+	vkDestroySampler(device, gBufferSampler, nullptr);
 	vkDestroyImageView(device, gBuffer.position.imageView, nullptr);
 	vmaDestroyImage(allocator, gBuffer.position.image, gBuffer.position.imageMemory);
 	vkDestroyImageView(device, gBuffer.normal.imageView, nullptr);
 	vmaDestroyImage(allocator, gBuffer.normal.image, gBuffer.normal.imageMemory);
 	vkDestroyImageView(device, gBuffer.colour.imageView, nullptr);
 	vmaDestroyImage(allocator, gBuffer.colour.image, gBuffer.colour.imageMemory);
-	vkDestroyImageView(device, gBuffer.depth.imageView, nullptr);
-	vmaDestroyImage(allocator, gBuffer.depth.image, gBuffer.depth.imageMemory);
 	vkDestroyImageView(device, textureImageView, nullptr);
 	vmaDestroyImage(allocator, textureImage, textureImageMemory);
 
@@ -107,6 +108,7 @@ void VulkanApplication::CleanUp()
 		vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
 		vkDestroyFence(device, inFlightFences[i], nullptr);
 	}
+	vkDestroySemaphore(device, geometryPassSemaphore, nullptr);
 
 	// Destroy command pool
 	vkDestroyCommandPool(device, commandPool, nullptr);
@@ -511,7 +513,8 @@ void VulkanApplication::RecreateSwapChain()
 	CreateGraphicsPipelines();
 	CreateDepthResources();
 	CreateFrameBuffers();
-	AllocateCommandBuffers();
+	AllocateDeferredCommandBuffers();
+	AllocateGeometryCommandBuffer();
 }
 
 VkImageView VulkanApplication::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
@@ -551,6 +554,8 @@ void VulkanApplication::CleanUpSwapChain()
 	// Destroy depth buffers
 	vkDestroyImageView(device, gBuffer.depth.imageView, nullptr);
 	vmaDestroyImage(allocator, gBuffer.depth.image, gBuffer.depth.imageMemory);
+	vkDestroyImageView(device, deferredDepthImageView, nullptr);
+	vmaDestroyImage(allocator, deferredDepthImage, deferredDepthImageMemory);
 
 	// Destroy frame buffers
 	for (size_t i = 0; i < swapChainFramebuffers.size(); i++)
@@ -558,8 +563,9 @@ void VulkanApplication::CleanUpSwapChain()
 		vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
 	}
 	vkDestroyFramebuffer(device, gBuffer.frameBuffer, nullptr);
+
 	// Free command buffers
-	vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+	vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(deferredCommandBuffers.size()), deferredCommandBuffers.data());
 	vkFreeCommandBuffers(device, commandPool, 1, &geometryCommandBuffer);
 	vkDestroyPipeline(device, deferredPipeline, nullptr);
 	vkDestroyPipeline(device, geometryPipeline, nullptr);
@@ -1099,7 +1105,26 @@ void VulkanApplication::CreateFrameBuffers()
 	swapChainFramebuffers.resize(swapChainImageViews.size());
 	for (size_t i = 0; i < swapChainImageViews.size(); i++)
 	{
-		
+		std::array<VkImageView, 2> attachments =
+		{
+			swapChainImageViews[i],
+			deferredDepthImageView
+		};
+
+		VkFramebufferCreateInfo framebufferInfo = {};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.pNext = NULL;
+		framebufferInfo.renderPass = deferredRenderPass; // Tell frame buffer which render pass it should be compatible with
+		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+		framebufferInfo.pAttachments = attachments.data();
+		framebufferInfo.width = swapChainExtent.width;
+		framebufferInfo.height = swapChainExtent.height;
+		framebufferInfo.layers = 1;
+
+		if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) 
+		{
+			throw std::runtime_error("Failed to create frame buffer");
+		}
 	}
 }
 
@@ -1147,35 +1172,47 @@ void VulkanApplication::DrawFrame()
 	// Update the uniform buffer
 	UpdateDeferredUniformBuffer(imageIndex);
 
+	/// GEOMETRY PASS =======================================================================================
 	// Submit the command buffer. Waits for the provided semaphores to be signaled before beginning execution
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-	VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrame] };
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }; // Waiting until we can start writing color, in theory this means the implementation can execute the vertex buffer while image isn't available
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = waitSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
 
-	// Specify the semaphores to signal when command buffer is completed execution
-	VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
+	// Wait for image to be available, and signal when g-buffer is filled
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &imageAvailableSemaphores[currentFrame];
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = signalSemaphores;
+	submitInfo.pSignalSemaphores = &geometryPassSemaphore;
 
 	// Submit to queue
+	submitInfo.pCommandBuffers = &geometryCommandBuffer;
+	submitInfo.commandBufferCount = 1;
 	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to submit draw command buffer");
 	}
+	/// =====================================================================================================
+
+	/// DEFERRED PASS =======================================================================================
+	// Wait for g-buffer being filled, signal when rendering is complete
+	submitInfo.pWaitSemaphores = &geometryPassSemaphore;
+	submitInfo.pSignalSemaphores = &renderFinishedSemaphores[currentFrame];
+
+	// Submit to queue
+	submitInfo.pCommandBuffers = &deferredCommandBuffers[imageIndex];
+	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to submit draw command buffer");
+	}
+	/// =====================================================================================================
 
 	// Now submit the resulting image back to the swap chain
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = signalSemaphores; // Wait for command buffer to finish
+	presentInfo.pWaitSemaphores = &renderFinishedSemaphores[currentFrame]; // Wait for deferred pass to finish
 
 	VkSwapchainKHR swapChains[] = { swapChain };
 	presentInfo.swapchainCount = 1;
@@ -1243,19 +1280,19 @@ void VulkanApplication::CreateCommandPool()
 	}
 }
 
-void VulkanApplication::AllocateCommandBuffers()
+void VulkanApplication::AllocateDeferredCommandBuffers()
 {
-	commandBuffers.resize(swapChainFramebuffers.size());
+	deferredCommandBuffers.resize(swapChainFramebuffers.size());
 
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = commandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = static_cast<uint32_t>(commandBuffers.size());
+	allocInfo.commandBufferCount = static_cast<uint32_t>(deferredCommandBuffers.size());
 
-	if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS)
+	if (vkAllocateCommandBuffers(device, &allocInfo, deferredCommandBuffers.data()) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to allocate command buffers");
+		throw std::runtime_error("Failed to allocate deferred command buffers");
 	}
 
 	// Define clear values
@@ -1264,22 +1301,22 @@ void VulkanApplication::AllocateCommandBuffers()
 	clearValues[1].depthStencil = { 1.0f, 0 };
 
 	// Begin recording command buffers
-	for (size_t i = 0; i < commandBuffers.size(); i++)
+	for (size_t i = 0; i < deferredCommandBuffers.size(); i++)
 	{
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 		beginInfo.pInheritanceInfo = nullptr; // Optional
 
-		if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS)
+		if (vkBeginCommandBuffer(deferredCommandBuffers[i], &beginInfo) != VK_SUCCESS)
 		{
-			throw std::runtime_error("failed to begin recording command buffer!");
+			throw std::runtime_error("Failed to begin recording deferred command buffer");
 		}
 
 		// Start the render pass
 		VkRenderPassBeginInfo renderPassInfo = {};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = renderPass;
+		renderPassInfo.renderPass = deferredRenderPass;
 		renderPassInfo.framebuffer = swapChainFramebuffers[i];
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = swapChainExtent;
@@ -1287,29 +1324,94 @@ void VulkanApplication::AllocateCommandBuffers()
 		renderPassInfo.pClearValues = clearValues.data();
 
 		// The first parameter for every command is always the command buffer to record the command to.
-		vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(deferredCommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		// Now bind the graphics pipeline
-		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipeline);
+		vkCmdBindPipeline(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipeline);
 
 		// Bind the vertex and index buffers
 		VkBuffer vertexBuffers[] = { vertexBuffer };
 		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
-		vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindVertexBuffers(deferredCommandBuffers[i], 0, 1, vertexBuffers, offsets);
+		vkCmdBindIndexBuffer(deferredCommandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		// Bind the correct descriptor set for this swapchain image and draw data using the index buffer
-		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipelineLayout, 0, 1, &descriptorSets[i], 0, nullptr);
-		vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		// Bind the correct descriptor set for this swapchain image and draw data using the index buffer TODO: CHANGE VERTEX/INDEX BUFFERS TO FULL SCREEN QUAD
+		vkCmdBindDescriptorSets(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipelineLayout, 0, 1, &deferredDescriptorSets[i], 0, nullptr);
+		vkCmdDrawIndexed(deferredCommandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
 		// Now end the render pass
-		vkCmdEndRenderPass(commandBuffers[i]);
+		vkCmdEndRenderPass(deferredCommandBuffers[i]);
 
 		// And end recording of command buffers
-		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS)
+		if (vkEndCommandBuffer(deferredCommandBuffers[i]) != VK_SUCCESS)
 		{
-			throw std::runtime_error("Failed to record command buffer");
+			throw std::runtime_error("Failed to record deferred command buffer");
 		}
+	}
+}
+
+void VulkanApplication::AllocateGeometryCommandBuffer()
+{
+	VkCommandBufferAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = commandPool;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = 1;
+
+	if (vkAllocateCommandBuffers(device, &allocInfo, &geometryCommandBuffer) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to allocate geometry command buffer");
+	}
+
+	// Create the semaphore to synchronise the geometry pass
+	VkSemaphoreCreateInfo semaphoreInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+	if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &geometryPassSemaphore) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create geometry pass semaphore");
+	}
+
+	// Set up clear values for each attachment
+	std::array<VkClearValue, 4> clearValues;
+	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+	clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+	clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+	clearValues[3].depthStencil = { 1.0f, 0 };
+
+	// Begin recording the command buffer
+	VkCommandBufferBeginInfo cmdBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	if (vkBeginCommandBuffer(geometryCommandBuffer, &cmdBeginInfo) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to begin recording geometry command buffer");
+	}
+
+	// Render Pass info
+	VkRenderPassBeginInfo renderPassInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+	renderPassInfo.renderPass = gBuffer.renderPass;
+	renderPassInfo.framebuffer = gBuffer.frameBuffer;
+	renderPassInfo.renderArea.extent = swapChainExtent;
+	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+	renderPassInfo.pClearValues = clearValues.data();
+
+	// Begin the render pass
+	vkCmdBeginRenderPass(geometryCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	// Bind the pipeline
+	vkCmdBindPipeline(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipeline);
+
+	// Bind descriptor sets and geometry buffers
+	VkDeviceSize offsets[1] = { 0 };
+	VkBuffer vertexBuffers[] = { vertexBuffer };
+	vkCmdBindDescriptorSets(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipelineLayout, 0, 1, &geometryDescriptorSet, 0, nullptr);
+	vkCmdBindVertexBuffers(geometryCommandBuffer, 0, 1, vertexBuffers, offsets);
+	vkCmdBindIndexBuffer(geometryCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(geometryCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+
+	vkCmdEndRenderPass(geometryCommandBuffer);
+
+	// End recording of command buffer
+	if (vkEndCommandBuffer(geometryCommandBuffer) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to record geometry command buffer");
 	}
 }
 
@@ -1363,6 +1465,15 @@ void VulkanApplication::CreateDepthResources()
 
 	// Transition depth image for shader usage
 	TransitionImageLayout(gBuffer.depth.image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+
+	// Now set up the depth attachments for the deferred pass (TODO: may be completely unnecessary)
+	// Create Image and ImageView objects
+	CreateImage(swapChainExtent.width, swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, deferredDepthImage, deferredDepthImageMemory);
+	deferredDepthImageView = CreateImageView(deferredDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	// Transition depth image for shader usage
+	TransitionImageLayout(deferredDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
 VkFormat VulkanApplication::FindDepthFormat()

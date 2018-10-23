@@ -229,7 +229,8 @@ private:
 
 #pragma region Command Buffer Functions
 	void CreateCommandPool();
-	void AllocateCommandBuffers();
+	void AllocateDeferredCommandBuffers();
+	void AllocateGeometryCommandBuffer();
 	VkCommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 #pragma endregion
@@ -321,8 +322,14 @@ private:
 #pragma endregion
 
 #pragma region Command Buffer Objects
-	std::vector<VkCommandBuffer> commandBuffers;
+	std::vector<VkCommandBuffer> deferredCommandBuffers;
 	VkCommandPool commandPool;
+#pragma endregion
+
+#pragma region Depth Buffer Objects
+	VkImage deferredDepthImage;
+	VmaAllocation deferredDepthImageMemory;
+	VkImageView deferredDepthImageView;
 #pragma endregion
 
 #pragma region Buffer Objects
@@ -361,7 +368,7 @@ private:
 	VmaAllocation geometryUniformBufferAllocation;
 	FrameBuffer gBuffer;
 	VkSampler gBufferSampler;
-	VkSemaphore geometryPassSemapohore;
+	VkSemaphore geometryPassSemaphore;
 	VkCommandBuffer geometryCommandBuffer;
 #pragma endregion
 };
