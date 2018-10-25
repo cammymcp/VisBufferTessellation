@@ -835,6 +835,7 @@ void VulkanApplication::CreateGraphicsPipelines()
 	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
 	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
 
 	// We're using a different render pass for this pipeline
 	pipelineInfo.renderPass = gBuffer.renderPass;
@@ -850,6 +851,7 @@ void VulkanApplication::CreateGraphicsPipelines()
 	};
 	colourBlending.attachmentCount = static_cast<uint32_t>(blendAttachmentStates.size());
 	colourBlending.pAttachments = blendAttachmentStates.data();
+	pipelineInfo.pColorBlendState = &colourBlending;
 
 	// Now create the geometry pass pipeline
 	if (vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &geometryPipeline) != VK_SUCCESS)
