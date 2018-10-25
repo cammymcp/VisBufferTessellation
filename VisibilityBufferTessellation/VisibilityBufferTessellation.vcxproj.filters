@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{f9f40e4b-49f2-4cee-a65c-33f2f1c3c0d9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="VulkanApplication.cpp">
@@ -29,5 +32,19 @@
     <ClInclude Include="vk_mem_alloc.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\deferred.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\deferred.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\geometry.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\geometry.vert">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

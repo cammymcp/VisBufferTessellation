@@ -29,13 +29,13 @@ void VulkanApplication::InitVulkan()
 	CreateLogicalDevice();
 	CreateSwapChain();
 	CreateImageViews();
+	CreateVmaAllocator();
+	CreateCommandPool();
 	CreateGeometryRenderPass();
 	CreateDeferredRenderPass();
 	CreateDescriptorSetLayout();
 	CreatePipelineCache();
 	CreateGraphicsPipelines();
-	CreateCommandPool();
-	CreateVmaAllocator();
 	CreateTextureImage();
 	CreateTextureImageView();
 	CreateTextureSampler();
@@ -43,6 +43,7 @@ void VulkanApplication::InitVulkan()
 	LoadModel();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
+	CreateFullScreenQuad();
 	CreateUniformBuffers();
 	CreateDescriptorPool();
 	CreateFrameBuffers();
@@ -901,6 +902,12 @@ void VulkanApplication::CreatePipelineLayouts()
 
 void VulkanApplication::CreateGeometryRenderPass()
 {
+	// Create gBuffer attachments
+	CreateFrameBufferAttachment(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &gBuffer.position);
+	CreateFrameBufferAttachment(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &gBuffer.normal);
+	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &gBuffer.colour);
+	CreateDepthResources();
+
 	// Create attachment descriptions for the gbuffer
 	std::array<VkAttachmentDescription, 4> attachmentDescs = {};
 
@@ -1073,12 +1080,6 @@ VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& co
 #pragma region Drawing Functions
 void VulkanApplication::CreateFrameBuffers()
 {
-	// Create gBuffer attachments
-	CreateFrameBufferAttachment(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &gBuffer.position);
-	CreateFrameBufferAttachment(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &gBuffer.normal);
-	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &gBuffer.colour);
-	CreateDepthResources();
-
 	// Create gBuffer
 	std::array<VkImageView, 4> attachments;
 	attachments[0] = gBuffer.position.imageView;
@@ -1171,6 +1172,7 @@ void VulkanApplication::DrawFrame()
 
 	// Update the uniform buffer
 	UpdateDeferredUniformBuffer(imageIndex);
+	UpdateGeometryUniformBuffer();
 
 	/// GEOMETRY PASS =======================================================================================
 	// Submit the command buffer. Waits for the provided semaphores to be signaled before beginning execution
@@ -1330,14 +1332,14 @@ void VulkanApplication::AllocateDeferredCommandBuffers()
 		vkCmdBindPipeline(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipeline);
 
 		// Bind the vertex and index buffers
-		VkBuffer vertexBuffers[] = { vertexBuffer };
+		VkBuffer quadVertexBuffers[] = { fsQuadVertexBuffer };
 		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(deferredCommandBuffers[i], 0, 1, vertexBuffers, offsets);
-		vkCmdBindIndexBuffer(deferredCommandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindVertexBuffers(deferredCommandBuffers[i], 0, 1, quadVertexBuffers, offsets);
+		vkCmdBindIndexBuffer(deferredCommandBuffers[i], fsQuadIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-		// Bind the correct descriptor set for this swapchain image and draw data using the index buffer TODO: CHANGE VERTEX/INDEX BUFFERS TO FULL SCREEN QUAD
+		// Bind the correct descriptor set for this swapchain image and draw data using the index buffer
 		vkCmdBindDescriptorSets(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipelineLayout, 0, 1, &deferredDescriptorSets[i], 0, nullptr);
-		vkCmdDrawIndexed(deferredCommandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		vkCmdDrawIndexed(deferredCommandBuffers[i], 6, 1, 0, 0, 0);
 
 		// Now end the render pass
 		vkCmdEndRenderPass(deferredCommandBuffers[i]);
@@ -1453,11 +1455,70 @@ void VulkanApplication::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 }
 #pragma endregion
 
+#pragma region Deferred Rendering Functions
+// Creates the quad that the deferred rendering pass will display the final result to.
+void VulkanApplication::CreateFullScreenQuad()
+{
+	struct QuadVertex
+	{
+		glm::vec3 pos;
+		glm::vec3 colour;
+		glm::vec2 tex;
+	};
+
+	// Set up vertices (counter clockwise)
+	std::vector<QuadVertex> quadVertexBuffer;
+	quadVertexBuffer.push_back({ {-1.0f, 1.0f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }); // Bottom left
+	quadVertexBuffer.push_back({ { 1.0f, 1.0f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }); // Bottom right
+	quadVertexBuffer.push_back({ { 1.0f,-1.0f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }); // Top Right
+	quadVertexBuffer.push_back({ {-1.0f,-1.0f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }); // Top Left
+
+	// Create staging buffer on host memory
+	VkBuffer stagingBuffer;
+	VmaAllocation stagingBufferAllocation;
+	VkDeviceSize bufferSize = quadVertexBuffer.size() * sizeof(QuadVertex);
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferAllocation);
+
+	// Map vertex data to staging buffer memory allocation
+	void* mappedVertexData;
+	vmaMapMemory(allocator, stagingBufferAllocation, &mappedVertexData);
+	memcpy(mappedVertexData, quadVertexBuffer.data(), (size_t)bufferSize);
+	vmaUnmapMemory(allocator, stagingBufferAllocation);
+
+	// Create vertex buffer on device local memory
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, fsQuadVertexBuffer, fsQuadVertexMemory);
+
+	// Copy data to new vertex buffer
+	CopyBuffer(stagingBuffer, fsQuadVertexBuffer, bufferSize);
+
+	// Set up indices
+	std::vector<uint16_t> quadIndexBuffer = { 0, 1, 2,  2, 3, 0 };
+	bufferSize = sizeof(quadIndexBuffer[0]) * quadIndexBuffer.size();
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferAllocation);
+
+	// Map vertex data to staging buffer memory allocation
+	void* mappedIndexData;
+	vmaMapMemory(allocator, stagingBufferAllocation, &mappedIndexData);
+	memcpy(mappedIndexData, quadIndexBuffer.data(), (size_t)bufferSize);
+	vmaUnmapMemory(allocator, stagingBufferAllocation);
+
+	// Create index buffer on device local memory
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, fsQuadIndexBuffer, fsQuadIndexMemory);
+
+	// Copy data to new index buffer
+	CopyBuffer(stagingBuffer, fsQuadIndexBuffer, bufferSize);
+
+	// Clean up staging buffer
+	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAllocation);
+}
+#pragma endregion
+
 #pragma region Depth Buffer Functions
 void VulkanApplication::CreateDepthResources()
 {
 	// Select format
 	VkFormat depthFormat = FindDepthFormat();
+	gBuffer.depth.format = depthFormat;
 
 	// Create Image and ImageView objects
 	CreateImage(swapChainExtent.width, swapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, gBuffer.depth.image, gBuffer.depth.imageMemory);
@@ -1465,7 +1526,6 @@ void VulkanApplication::CreateDepthResources()
 
 	// Transition depth image for shader usage
 	TransitionImageLayout(gBuffer.depth.image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
 
 	// Now set up the depth attachments for the deferred pass (TODO: may be completely unnecessary)
 	// Create Image and ImageView objects
@@ -1981,15 +2041,15 @@ void VulkanApplication::CreateDescriptorPool()
 {
 	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImages.size()) + 2;
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImages.size());
+	poolSizes[1].descriptorCount = (3 * static_cast<uint32_t>(swapChainImages.size())) + 6;
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<uint32_t>(swapChainImages.size());
+	poolInfo.maxSets = 4;
 
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
 	{
@@ -1997,12 +2057,12 @@ void VulkanApplication::CreateDescriptorPool()
 	}
 }
 
-// Create two descriptor sets, one containing the gBuffer images, and one with the MVP uniform buffer and texture for the loaded model
+// Create two descriptor sets, one containing the gBuffer images for the deferred pass, and one with the MVP uniform buffer and texture for the loaded model
 void VulkanApplication::CreateDescriptorSets()
 {
 	std::vector<VkDescriptorSetLayout> layouts(swapChainImages.size(), descriptorSetLayout);
 
-	// Create deferred pass descriptor sets
+	// Create deferred pass descriptor set for textured quad
 	VkDescriptorSetAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = descriptorPool;
@@ -2134,7 +2194,7 @@ void VulkanApplication::SetupDebugCallback()
 	createInfo.pfnUserCallback = DebugCallback;
 	createInfo.pUserData = nullptr; // Optional
 
-									// Set up object from external function
+	// Set up object from external function
 	if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &callback) != VK_SUCCESS)
 		throw std::runtime_error("Failed to setup debug callback!");
 }
@@ -2145,7 +2205,26 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanApplication::DebugCallback(
 	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
 	void* pUserData)
 {
-	std::cerr << "Validation Layer Message: " << pCallbackData->pMessage << std::endl;
+	std::string messageTypeStr = "";
+	switch (messageType)
+	{
+	case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
+	{
+		messageTypeStr = "General";
+		break;
+	}
+	case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
+	{
+		messageTypeStr = "Violation";
+		break;
+	}
+	case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
+	{
+		messageTypeStr = "Performance";
+		break;
+	}
+	}
+	std::cerr << "Validation Layer Message (" << messageTypeStr << "): " << pCallbackData->pMessage << std::endl;
 
 	return VK_FALSE;
 }

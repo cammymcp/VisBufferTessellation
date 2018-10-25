@@ -235,6 +235,10 @@ private:
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 #pragma endregion
 
+#pragma region Deferred Rendering Functions
+	void CreateFullScreenQuad();
+#pragma endregion
+
 #pragma region Depth Buffer Functions
 	void CreateDepthResources();
 	VkFormat FindDepthFormat();
@@ -370,6 +374,10 @@ private:
 	VkSampler gBufferSampler;
 	VkSemaphore geometryPassSemaphore;
 	VkCommandBuffer geometryCommandBuffer;
+	VkBuffer fsQuadVertexBuffer;
+	VkBuffer fsQuadIndexBuffer;
+	VmaAllocation fsQuadVertexMemory;
+	VmaAllocation fsQuadIndexMemory;
 #pragma endregion
 };
 

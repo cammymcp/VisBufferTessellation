@@ -166,6 +166,12 @@
     <ClInclude Include="vk_mem_alloc.h" />
     <ClInclude Include="VulkanApplication.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\deferred.frag" />
+    <None Include="shaders\deferred.vert" />
+    <None Include="shaders\geometry.frag" />
+    <None Include="shaders\geometry.vert" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
