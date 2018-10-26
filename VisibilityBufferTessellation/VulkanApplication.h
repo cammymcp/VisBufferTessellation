@@ -211,7 +211,8 @@ private:
 #pragma endregion
 
 #pragma region Graphics Pipeline Functions
-	void CreateGraphicsPipelines();
+	void CreateDeferredGraphicsPipeline();
+	VkPipeline CreateGeometryGraphicsPipeline();
 	void CreatePipelineCache();
 	void CreatePipelineLayouts();
 	VkPipelineColorBlendAttachmentState CreatePipelineColorBlendAttachmentState(VkColorComponentFlags colorWriteMask, VkBool32 blendEnable);

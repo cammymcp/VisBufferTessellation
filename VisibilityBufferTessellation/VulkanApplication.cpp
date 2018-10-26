@@ -35,6 +35,8 @@ void VulkanApplication::InitVulkan()
 	CreateDeferredRenderPass();
 	CreateDescriptorSetLayout();
 	CreatePipelineCache();
+	CreatePipelineLayouts();
+	CreateDeferredGraphicsPipeline();
 	CreateTextureImage();
 	CreateTextureImageView();
 	CreateTextureSampler();
@@ -44,7 +46,6 @@ void VulkanApplication::InitVulkan()
 	CreateIndexBuffer();
 	CreateFullScreenQuad();
 	CreateUniformBuffers();
-	CreateGraphicsPipelines();
 	CreateDescriptorPool();
 	CreateFrameBuffers();
 	CreateDescriptorSets();
@@ -300,13 +301,14 @@ void VulkanApplication::SelectPhysicalDevice()
 bool VulkanApplication::isDeviceSuitable(VkPhysicalDevice device)
 {
 	// Get properties and features of graphics device
-	//VkPhysicalDeviceProperties deviceProperties;
-	//vkGetPhysicalDeviceProperties(device, &deviceProperties);
-	//VkPhysicalDeviceFeatures deviceFeatures;
-	//vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+	VkPhysicalDeviceProperties deviceProperties;
+	vkGetPhysicalDeviceProperties(device, &deviceProperties);
+	// Check for device features
+	VkPhysicalDeviceFeatures supportedFeatures;
+	vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 
-	// We only want dedicated graphics cards that support geometry shaders
-	//return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
+	// We only want dedicated graphics cards
+	bool discrete = (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
 
 	// Check for required queue families
 	QueueFamilyIndices indices = FindQueueFamilies(device);
@@ -319,11 +321,8 @@ bool VulkanApplication::isDeviceSuitable(VkPhysicalDevice device)
 		SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
 		swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
 	}
-	// Check for device features
-	VkPhysicalDeviceFeatures supportedFeatures;
-	vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 
-	return indices.isSuitable() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;;
+	return indices.isSuitable() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && discrete;
 }
 
 QueueFamilyIndices VulkanApplication::FindQueueFamilies(VkPhysicalDevice device)
@@ -511,7 +510,8 @@ void VulkanApplication::RecreateSwapChain()
 	CreateImageViews();
 	CreateGeometryRenderPass();
 	CreateDeferredRenderPass();
-	CreateGraphicsPipelines();
+	CreateDeferredGraphicsPipeline();
+	CreateGeometryGraphicsPipeline();
 	CreateDepthResources();
 	CreateFrameBuffers();
 	AllocateDeferredCommandBuffers();
@@ -689,7 +689,7 @@ VkExtent2D VulkanApplication::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& c
 // Fixed-function state: all of the structures that define the fixed-function stages of the pipeline
 // Pipeline Layout: the uniform and push values referenced by the shader that can be updated at draw time
 // Render pass: the attachments referenced by the pipeline stages and their usage
-void VulkanApplication::CreateGraphicsPipelines()
+void VulkanApplication::CreateDeferredGraphicsPipeline()
 {
 	// Create deferred pipeline first
 	// Create deferred shader stages from compiled shader code
@@ -720,6 +720,8 @@ void VulkanApplication::CreateGraphicsPipelines()
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
+	inputAssembly.pNext = nullptr;
+	inputAssembly.flags = 0;
 
 	// Set up viewport to be the whole of the swap chain images
 	VkViewport viewport = {};
@@ -742,6 +744,8 @@ void VulkanApplication::CreateGraphicsPipelines()
 	viewportState.pViewports = &viewport;
 	viewportState.scissorCount = 1;
 	viewportState.pScissors = &scissor;
+	viewportState.pNext = nullptr;
+	viewportState.flags = 0;
 
 	// Set up the rasterizer, wireframe can be set here
 	VkPipelineRasterizationStateCreateInfo rasterizer = {};
@@ -756,6 +760,8 @@ void VulkanApplication::CreateGraphicsPipelines()
 	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
 	rasterizer.depthBiasClamp = 0.0f; // Optional
 	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+	rasterizer.pNext = nullptr;
+	rasterizer.flags = 0;
 
 	// Set up depth test
 	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -765,12 +771,16 @@ void VulkanApplication::CreateGraphicsPipelines()
 	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.stencilTestEnable = VK_FALSE;
+	depthStencil.pNext = nullptr;
+	depthStencil.flags = 0;
 
 	// Set up multisampling (disabled)
 	VkPipelineMultisampleStateCreateInfo multisampling = {};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.pNext = nullptr;
+	multisampling.flags = 0;
 
 	// Set up color blending (disbaled, all fragment colors will go to the framebuffer unmodified)
 	VkPipelineColorBlendAttachmentState colourBlendAttachment = {};
@@ -781,9 +791,16 @@ void VulkanApplication::CreateGraphicsPipelines()
 	colourBlending.logicOpEnable = VK_FALSE;
 	colourBlending.attachmentCount = 1;
 	colourBlending.pAttachments = &colourBlendAttachment;
+	colourBlending.pNext = nullptr;
+	colourBlending.flags = 0;
 
-	// Pipeline Layout
-	CreatePipelineLayouts();
+	// Dynamic State
+	std::vector<VkDynamicState> dynamicStateEnables = {	VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR	};
+	VkPipelineDynamicStateCreateInfo dynamicState = {};
+	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicState.pDynamicStates = dynamicStateEnables.data();
+	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
+	dynamicState.flags = 0;
 
 	// We now have everything we need to create the deferred graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
@@ -796,13 +813,13 @@ void VulkanApplication::CreateGraphicsPipelines()
 	pipelineInfo.pMultisampleState = &multisampling;
 	pipelineInfo.pDepthStencilState = &depthStencil;
 	pipelineInfo.pColorBlendState = &colourBlending;
-	pipelineInfo.pDynamicState = nullptr; // I'll probably want to change this later
+	pipelineInfo.pDynamicState = &dynamicState;
 	pipelineInfo.layout = deferredPipelineLayout;
 	pipelineInfo.renderPass = deferredRenderPass;
 	pipelineInfo.subpass = 0; // Index of the sub pass where this pipeline will be used
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; 
 	pipelineInfo.basePipelineIndex = -1;
-	pipelineInfo.pNext = NULL;
+	pipelineInfo.pNext = nullptr;
 	pipelineInfo.flags = 0;
 	// Empty vertex input state, quads are generated by the vertex shader
 	VkPipelineVertexInputStateCreateInfo emptyInputState = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
@@ -811,20 +828,119 @@ void VulkanApplication::CreateGraphicsPipelines()
 	{
 		throw std::runtime_error("Failed to create deferred pipeline");
 	}
-	
+
+	// Clean up shader module objects
+	vkDestroyShaderModule(device, vertShaderModule, nullptr);
+	vkDestroyShaderModule(device, fragShaderModule, nullptr);
+}
+
+VkPipeline VulkanApplication::CreateGeometryGraphicsPipeline()
+{
 	// Now modify the create info to create the geometry pass pipeline
 	// Create geometry shader stages from compiled shader code
-	vertShaderCode = ReadFile("shaders/geometry.vert.spv");
-	fragShaderCode = ReadFile("shaders/geometry.frag.spv");
+	auto vertShaderCode = ReadFile("shaders/geometry.vert.spv");
+	auto fragShaderCode = ReadFile("shaders/geometry.frag.spv");
+
 	// Create shader modules
+	VkShaderModule vertShaderModule;
+	VkShaderModule fragShaderModule;
 	vertShaderModule = CreateShaderModule(vertShaderCode);
 	fragShaderModule = CreateShaderModule(fragShaderCode);
 
 	// Create shader stages
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo = {}; // Vertex
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
 	vertShaderStageInfo.module = vertShaderModule;
+	vertShaderStageInfo.pName = "main";
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo = {}; // Fragment
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	fragShaderStageInfo.module = fragShaderModule;
+	fragShaderStageInfo.pName = "main";
 	VkPipelineShaderStageCreateInfo geometryShaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-	pipelineInfo.pStages = geometryShaderStages;
+
+	// Set up topology input format
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssembly.primitiveRestartEnable = VK_FALSE;
+	inputAssembly.pNext = nullptr;
+	inputAssembly.flags = 0;
+
+	// Set up viewport to be the whole of the swap chain images
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = (float)swapChainExtent.width;
+	viewport.height = (float)swapChainExtent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	// Set the scissor to the whole of the framebuffer, eg no cropping 
+	VkRect2D scissor = {};
+	scissor.offset = { 0, 0 };
+	scissor.extent = swapChainExtent;
+
+	// Now create the viewport state with viewport and scissor
+	VkPipelineViewportStateCreateInfo viewportState = {};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = &viewport;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = &scissor;
+	viewportState.pNext = nullptr;
+	viewportState.flags = 0;
+
+	// Set up the rasterizer, wireframe can be set here
+	VkPipelineRasterizationStateCreateInfo rasterizer = {};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE; // Fragments beyond near and far planes are clamped instead of discarded. Useful for shadow mapping but requires GPU feature
+	rasterizer.rasterizerDiscardEnable = VK_FALSE; // Geometry never passes through rasterizer if this is true.
+	rasterizer.polygonMode = WIREFRAME ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back faces
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+	rasterizer.depthBiasClamp = 0.0f; // Optional
+	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+	rasterizer.pNext = nullptr;
+	rasterizer.flags = 0;
+
+	// Set up depth test
+	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
+	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencil.depthTestEnable = VK_TRUE;
+	depthStencil.depthWriteEnable = VK_TRUE;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.stencilTestEnable = VK_FALSE;
+	depthStencil.pNext = nullptr;
+	depthStencil.flags = 0;
+
+	// Set up multisampling (disabled)
+	VkPipelineMultisampleStateCreateInfo multisampling = {};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.pNext = nullptr;
+	multisampling.flags = 0;
+
+	// We need to set up color blend attachments for all of the gbuffer color attachments in the subpass (position, normal, albedo)
+	std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachmentStates =
+	{
+		CreatePipelineColorBlendAttachmentState(0xf, VK_FALSE),
+		CreatePipelineColorBlendAttachmentState(0xf, VK_FALSE),
+		CreatePipelineColorBlendAttachmentState(0xf, VK_FALSE)
+	};
+	VkPipelineColorBlendStateCreateInfo colourBlending = {};
+	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colourBlending.logicOpEnable = VK_FALSE;
+	colourBlending.attachmentCount = static_cast<uint32_t>(blendAttachmentStates.size());
+	colourBlending.pAttachments = blendAttachmentStates.data();
+	colourBlending.pNext = nullptr;
+	colourBlending.flags = 0;
 
 	// Set up vertex input format for geometry pass
 	auto bindingDescription = Vertex::GetBindingDescription();
@@ -835,26 +951,39 @@ void VulkanApplication::CreateGraphicsPipelines()
 	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
 	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-	pipelineInfo.pVertexInputState = &vertexInputInfo;
 
-	// We're using a different render pass for this pipeline
-	pipelineInfo.renderPass = gBuffer.renderPass;
+	// Dynamic State
+	std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+	VkPipelineDynamicStateCreateInfo dynamicState = {};
+	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicState.pDynamicStates = dynamicStateEnables.data();
+	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
+	dynamicState.flags = 0;
 
-	// And a different layout
-	pipelineInfo.layout = geometryPipelineLayout;
-
-	// We need to set up blend attachments for all of the gbuffer color attachments in the subpass (position, normal, albedo)
-	std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachmentStates = {
-		CreatePipelineColorBlendAttachmentState(0xf, VK_FALSE),
-		CreatePipelineColorBlendAttachmentState(0xf, VK_FALSE),
-		CreatePipelineColorBlendAttachmentState(0xf, VK_FALSE)
-	};
-	colourBlending.attachmentCount = static_cast<uint32_t>(blendAttachmentStates.size());
-	colourBlending.pAttachments = blendAttachmentStates.data();
+	// We now have everything we need to create the geometry graphics pipeline
+	VkGraphicsPipelineCreateInfo pipelineInfo = {};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = geometryShaderStages;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = &depthStencil;
 	pipelineInfo.pColorBlendState = &colourBlending;
+	pipelineInfo.pDynamicState = &dynamicState;
+	pipelineInfo.layout = geometryPipelineLayout;
+	pipelineInfo.renderPass = gBuffer.renderPass;
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.subpass = 0; // Index of the sub pass where this pipeline will be used
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = -1;
+	pipelineInfo.pNext = nullptr;
+	pipelineInfo.flags = 0;
 
 	// Now create the geometry pass pipeline
-	if (vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &geometryPipeline) != VK_SUCCESS)
+	VkPipeline pipeline;
+	if (vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create deferred pipeline");
 	}
@@ -862,6 +991,8 @@ void VulkanApplication::CreateGraphicsPipelines()
 	// Clean up shader module objects
 	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 	vkDestroyShaderModule(device, fragShaderModule, nullptr);
+
+	return pipeline;
 }
 
 VkPipelineColorBlendAttachmentState VulkanApplication::CreatePipelineColorBlendAttachmentState(VkColorComponentFlags colorWriteMask, VkBool32 blendEnable)
@@ -890,6 +1021,8 @@ void VulkanApplication::CreatePipelineLayouts()
 	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
 	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+	pipelineLayoutInfo.pNext = nullptr;
+	pipelineLayoutInfo.flags = 0;
 
 	// Deferred Layout
 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &deferredPipelineLayout) != VK_SUCCESS)
@@ -1194,7 +1327,7 @@ void VulkanApplication::DrawFrame()
 	// Submit to queue
 	submitInfo.pCommandBuffers = &geometryCommandBuffer;
 	submitInfo.commandBufferCount = 1;
-	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
+	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to submit draw command buffer");
 	}
@@ -1332,6 +1465,21 @@ void VulkanApplication::AllocateDeferredCommandBuffers()
 		// The first parameter for every command is always the command buffer to record the command to.
 		vkCmdBeginRenderPass(deferredCommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+		VkViewport viewport = {};
+		viewport.width = (float) swapChainExtent.width;
+		viewport.height = (float) swapChainExtent.height;
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(deferredCommandBuffers[i], 0, 1, &viewport);
+
+		VkRect2D scissor = {};
+		scissor.extent = swapChainExtent;
+		scissor.offset = { 0, 0 };
+		vkCmdSetScissor(deferredCommandBuffers[i], 0, 1, &scissor);
+
+		// Bind the correct descriptor set for this swapchain image
+		vkCmdBindDescriptorSets(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipelineLayout, 0, 1, &deferredDescriptorSets[i], 0, nullptr);
+
 		// Now bind the graphics pipeline
 		vkCmdBindPipeline(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipeline);
 
@@ -1341,8 +1489,7 @@ void VulkanApplication::AllocateDeferredCommandBuffers()
 		vkCmdBindVertexBuffers(deferredCommandBuffers[i], 0, 1, quadVertexBuffers, offsets);
 		vkCmdBindIndexBuffer(deferredCommandBuffers[i], fsQuadIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-		// Bind the correct descriptor set for this swapchain image and draw data using the index buffer
-		vkCmdBindDescriptorSets(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipelineLayout, 0, 1, &deferredDescriptorSets[i], 0, nullptr);
+		// Draw data using the index buffer
 		vkCmdDrawIndexed(deferredCommandBuffers[i], 6, 1, 0, 0, 0);
 
 		// Now end the render pass
@@ -1401,15 +1548,31 @@ void VulkanApplication::AllocateGeometryCommandBuffer()
 	// Begin the render pass
 	vkCmdBeginRenderPass(geometryCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	// Bind the pipeline
-	vkCmdBindPipeline(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipeline);
+	VkViewport viewport = {};
+	viewport.width = (float) swapChainExtent.width;
+	viewport.height = (float) swapChainExtent.height;
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	vkCmdSetViewport(geometryCommandBuffer, 0, 1, &viewport);
 
-	// Bind descriptor sets and geometry buffers
+	VkRect2D scissor = {};
+	scissor.extent = swapChainExtent;
+	scissor.offset = { 0, 0 };
+	vkCmdSetScissor(geometryCommandBuffer, 0, 1, &scissor);
+
+	// Bind descriptor sets
+	vkCmdBindDescriptorSets(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipelineLayout, 0, 1, &geometryDescriptorSet, 0, nullptr);
+
+	// Bind the pipeline
+	vkCmdBindPipeline(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, CreateGeometryGraphicsPipeline());
+
+	// Bind geometry buffers
 	VkDeviceSize offsets[1] = { 0 };
 	VkBuffer vertexBuffers[] = { vertexBuffer };
-	vkCmdBindDescriptorSets(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipelineLayout, 0, 1, &geometryDescriptorSet, 0, nullptr);
 	vkCmdBindVertexBuffers(geometryCommandBuffer, 0, 1, vertexBuffers, offsets);
 	vkCmdBindIndexBuffer(geometryCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+	// Draw using index buffer
 	vkCmdDrawIndexed(geometryCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(geometryCommandBuffer);
@@ -1496,7 +1659,7 @@ void VulkanApplication::CreateFullScreenQuad()
 	CopyBuffer(stagingBuffer, fsQuadVertexBuffer, bufferSize);
 
 	// Set up indices
-	std::vector<uint16_t> quadIndexBuffer = { 0, 1, 2,  2, 3, 0 };
+	std::vector<uint16_t> quadIndexBuffer = { 1, 0, 2,  2, 3, 0 };
 	bufferSize = sizeof(quadIndexBuffer[0]) * quadIndexBuffer.size();
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferAllocation);
 
@@ -1687,6 +1850,7 @@ void VulkanApplication::UpdateGeometryUniformBuffer()
 
 	// Now generate the model, view and projection matrices
 	UniformBufferObject ubo = {};
+	glm::mat4 modelMat = glm::scale(glm::mat4(1.0f), glm::vec3(1.f, 1.f, 1.f));
 	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
@@ -1979,7 +2143,7 @@ void VulkanApplication::LoadModel()
 			vertex.texCoord =
 			{
 				attribute.texcoords[2 * index.texcoord_index + 0],
-				1.0f - attribute.texcoords[2 * index.texcoord_index + 1] // flip the y component to get the UVs compatible with Vulkans top-left origin
+				attribute.texcoords[2 * index.texcoord_index + 1] 
 			};
 			vertex.colour = { 1.0f, 1.0f, 1.0f };
 			vertices.push_back(vertex);
