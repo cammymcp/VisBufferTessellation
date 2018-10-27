@@ -211,11 +211,11 @@ private:
 #pragma endregion
 
 #pragma region Graphics Pipeline Functions
-	void CreateDeferredGraphicsPipeline();
-	VkPipeline CreateGeometryGraphicsPipeline();
+	void CreateDeferredPipeline();
+	VkPipeline CreateGeometryPipeline();
 	void CreatePipelineCache();
-	void CreatePipelineLayouts();
-	VkPipelineColorBlendAttachmentState CreatePipelineColorBlendAttachmentState(VkColorComponentFlags colorWriteMask, VkBool32 blendEnable);
+	void CreateDeferredPipelineLayout();
+	void CreateGeometryPipelineLayout();
 	void CreateGeometryRenderPass();
 	void CreateDeferredRenderPass();
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);

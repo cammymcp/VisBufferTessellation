@@ -35,8 +35,7 @@ void VulkanApplication::InitVulkan()
 	CreateDeferredRenderPass();
 	CreateDescriptorSetLayout();
 	CreatePipelineCache();
-	CreatePipelineLayouts();
-	CreateDeferredGraphicsPipeline();
+	CreateDeferredPipeline();
 	CreateTextureImage();
 	CreateTextureImageView();
 	CreateTextureSampler();
@@ -510,8 +509,7 @@ void VulkanApplication::RecreateSwapChain()
 	CreateImageViews();
 	CreateGeometryRenderPass();
 	CreateDeferredRenderPass();
-	CreateDeferredGraphicsPipeline();
-	CreateGeometryGraphicsPipeline();
+	CreateDeferredPipeline();
 	CreateDepthResources();
 	CreateFrameBuffers();
 	AllocateDeferredCommandBuffers();
@@ -689,9 +687,8 @@ VkExtent2D VulkanApplication::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& c
 // Fixed-function state: all of the structures that define the fixed-function stages of the pipeline
 // Pipeline Layout: the uniform and push values referenced by the shader that can be updated at draw time
 // Render pass: the attachments referenced by the pipeline stages and their usage
-void VulkanApplication::CreateDeferredGraphicsPipeline()
+void VulkanApplication::CreateDeferredPipeline()
 {
-	// Create deferred pipeline first
 	// Create deferred shader stages from compiled shader code
 	auto vertShaderCode = ReadFile("shaders/deferred.vert.spv");
 	auto fragShaderCode = ReadFile("shaders/deferred.frag.spv");
@@ -720,8 +717,6 @@ void VulkanApplication::CreateDeferredGraphicsPipeline()
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
-	inputAssembly.pNext = nullptr;
-	inputAssembly.flags = 0;
 
 	// Set up viewport to be the whole of the swap chain images
 	VkViewport viewport = {};
@@ -744,15 +739,13 @@ void VulkanApplication::CreateDeferredGraphicsPipeline()
 	viewportState.pViewports = &viewport;
 	viewportState.scissorCount = 1;
 	viewportState.pScissors = &scissor;
-	viewportState.pNext = nullptr;
-	viewportState.flags = 0;
 
 	// Set up the rasterizer, wireframe can be set here
 	VkPipelineRasterizationStateCreateInfo rasterizer = {};
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterizer.depthClampEnable = VK_FALSE; // Fragments beyond near and far planes are clamped instead of discarded. Useful for shadow mapping but requires GPU feature
 	rasterizer.rasterizerDiscardEnable = VK_FALSE; // Geometry never passes through rasterizer if this is true.
-	rasterizer.polygonMode = WIREFRAME ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back faces
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
@@ -760,8 +753,6 @@ void VulkanApplication::CreateDeferredGraphicsPipeline()
 	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
 	rasterizer.depthBiasClamp = 0.0f; // Optional
 	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-	rasterizer.pNext = nullptr;
-	rasterizer.flags = 0;
 
 	// Set up depth test
 	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -771,16 +762,12 @@ void VulkanApplication::CreateDeferredGraphicsPipeline()
 	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.stencilTestEnable = VK_FALSE;
-	depthStencil.pNext = nullptr;
-	depthStencil.flags = 0;
 
 	// Set up multisampling (disabled)
 	VkPipelineMultisampleStateCreateInfo multisampling = {};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-	multisampling.pNext = nullptr;
-	multisampling.flags = 0;
 
 	// Set up color blending (disbaled, all fragment colors will go to the framebuffer unmodified)
 	VkPipelineColorBlendAttachmentState colourBlendAttachment = {};
@@ -791,8 +778,6 @@ void VulkanApplication::CreateDeferredGraphicsPipeline()
 	colourBlending.logicOpEnable = VK_FALSE;
 	colourBlending.attachmentCount = 1;
 	colourBlending.pAttachments = &colourBlendAttachment;
-	colourBlending.pNext = nullptr;
-	colourBlending.flags = 0;
 
 	// Dynamic State
 	std::vector<VkDynamicState> dynamicStateEnables = {	VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR	};
@@ -801,6 +786,9 @@ void VulkanApplication::CreateDeferredGraphicsPipeline()
 	dynamicState.pDynamicStates = dynamicStateEnables.data();
 	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
 	dynamicState.flags = 0;
+
+	// PipelineLayout
+	CreateDeferredPipelineLayout();
 
 	// We now have everything we need to create the deferred graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
@@ -834,9 +822,8 @@ void VulkanApplication::CreateDeferredGraphicsPipeline()
 	vkDestroyShaderModule(device, fragShaderModule, nullptr);
 }
 
-VkPipeline VulkanApplication::CreateGeometryGraphicsPipeline()
+VkPipeline VulkanApplication::CreateGeometryPipeline()
 {
-	// Now modify the create info to create the geometry pass pipeline
 	// Create geometry shader stages from compiled shader code
 	auto vertShaderCode = ReadFile("shaders/geometry.vert.spv");
 	auto fragShaderCode = ReadFile("shaders/geometry.frag.spv");
@@ -860,13 +847,21 @@ VkPipeline VulkanApplication::CreateGeometryGraphicsPipeline()
 	fragShaderStageInfo.pName = "main";
 	VkPipelineShaderStageCreateInfo geometryShaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
+	// Set up vertex input format for geometry pass
+	auto bindingDescription = Vertex::GetBindingDescription();
+	auto attributeDescriptions = Vertex::GetAttributeDescriptions();
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
 	// Set up topology input format
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
-	inputAssembly.pNext = nullptr;
-	inputAssembly.flags = 0;
 
 	// Set up viewport to be the whole of the swap chain images
 	VkViewport viewport = {};
@@ -889,8 +884,6 @@ VkPipeline VulkanApplication::CreateGeometryGraphicsPipeline()
 	viewportState.pViewports = &viewport;
 	viewportState.scissorCount = 1;
 	viewportState.pScissors = &scissor;
-	viewportState.pNext = nullptr;
-	viewportState.flags = 0;
 
 	// Set up the rasterizer, wireframe can be set here
 	VkPipelineRasterizationStateCreateInfo rasterizer = {};
@@ -905,8 +898,6 @@ VkPipeline VulkanApplication::CreateGeometryGraphicsPipeline()
 	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
 	rasterizer.depthBiasClamp = 0.0f; // Optional
 	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-	rasterizer.pNext = nullptr;
-	rasterizer.flags = 0;
 
 	// Set up depth test
 	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -915,42 +906,38 @@ VkPipeline VulkanApplication::CreateGeometryGraphicsPipeline()
 	depthStencil.depthWriteEnable = VK_TRUE;
 	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.minDepthBounds = 0.0f; // Optional
+	depthStencil.maxDepthBounds = 1.0f; // Optional
 	depthStencil.stencilTestEnable = VK_FALSE;
-	depthStencil.pNext = nullptr;
-	depthStencil.flags = 0;
+	depthStencil.front = {}; // Optional
+	depthStencil.back = {}; // Optional
 
 	// Set up multisampling (disabled)
 	VkPipelineMultisampleStateCreateInfo multisampling = {};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-	multisampling.pNext = nullptr;
-	multisampling.flags = 0;
+	multisampling.minSampleShading = 1.0f; // Optional
+	multisampling.pSampleMask = nullptr; // Optional
+	multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+	multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
 	// We need to set up color blend attachments for all of the gbuffer color attachments in the subpass (position, normal, albedo)
-	std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachmentStates =
-	{
-		CreatePipelineColorBlendAttachmentState(0xf, VK_FALSE),
-		CreatePipelineColorBlendAttachmentState(0xf, VK_FALSE),
-		CreatePipelineColorBlendAttachmentState(0xf, VK_FALSE)
-	};
+	VkPipelineColorBlendAttachmentState posBlendAttachment = {};
+	posBlendAttachment.colorWriteMask = 0xf;
+	posBlendAttachment.blendEnable = VK_FALSE;
+	VkPipelineColorBlendAttachmentState normBlendAttachment = {};
+	normBlendAttachment.colorWriteMask = 0xf;
+	normBlendAttachment.blendEnable = VK_FALSE;
+	VkPipelineColorBlendAttachmentState colBlendAttachment = {};
+	colBlendAttachment.colorWriteMask = 0xf;
+	colBlendAttachment.blendEnable = VK_FALSE;
+	std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachments = { posBlendAttachment, normBlendAttachment, colBlendAttachment };
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
-	colourBlending.attachmentCount = static_cast<uint32_t>(blendAttachmentStates.size());
-	colourBlending.pAttachments = blendAttachmentStates.data();
-	colourBlending.pNext = nullptr;
-	colourBlending.flags = 0;
-
-	// Set up vertex input format for geometry pass
-	auto bindingDescription = Vertex::GetBindingDescription();
-	auto attributeDescriptions = Vertex::GetAttributeDescriptions();
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+	colourBlending.attachmentCount = static_cast<uint32_t>(blendAttachments.size());
+	colourBlending.pAttachments = blendAttachments.data();
 
 	// Dynamic State
 	std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
@@ -960,10 +947,16 @@ VkPipeline VulkanApplication::CreateGeometryGraphicsPipeline()
 	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
 	dynamicState.flags = 0;
 
+	// PipelineLayout
+	CreateGeometryPipelineLayout();
+
 	// We now have everything we need to create the geometry graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.stageCount = 2;
+	pipelineInfo.layout = geometryPipelineLayout;
+	pipelineInfo.renderPass = gBuffer.renderPass;
+	pipelineInfo.subpass = 0; // Index of the sub pass where this pipeline will be used
 	pipelineInfo.pStages = geometryShaderStages;
 	pipelineInfo.pInputAssemblyState = &inputAssembly;
 	pipelineInfo.pViewportState = &viewportState;
@@ -972,14 +965,9 @@ VkPipeline VulkanApplication::CreateGeometryGraphicsPipeline()
 	pipelineInfo.pDepthStencilState = &depthStencil;
 	pipelineInfo.pColorBlendState = &colourBlending;
 	pipelineInfo.pDynamicState = &dynamicState;
-	pipelineInfo.layout = geometryPipelineLayout;
-	pipelineInfo.renderPass = gBuffer.renderPass;
 	pipelineInfo.pVertexInputState = &vertexInputInfo;
-	pipelineInfo.subpass = 0; // Index of the sub pass where this pipeline will be used
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 	pipelineInfo.basePipelineIndex = -1;
-	pipelineInfo.pNext = nullptr;
-	pipelineInfo.flags = 0;
 
 	// Now create the geometry pass pipeline
 	VkPipeline pipeline;
@@ -995,14 +983,6 @@ VkPipeline VulkanApplication::CreateGeometryGraphicsPipeline()
 	return pipeline;
 }
 
-VkPipelineColorBlendAttachmentState VulkanApplication::CreatePipelineColorBlendAttachmentState(VkColorComponentFlags colorWriteMask, VkBool32 blendEnable)
-{
-	VkPipelineColorBlendAttachmentState pipelineColorBlendAttachmentState{};
-	pipelineColorBlendAttachmentState.colorWriteMask = colorWriteMask;
-	pipelineColorBlendAttachmentState.blendEnable = blendEnable;
-	return pipelineColorBlendAttachmentState;
-}
-
 void VulkanApplication::CreatePipelineCache()
 {
 	VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {};
@@ -1013,7 +993,7 @@ void VulkanApplication::CreatePipelineCache()
 	}
 }
 
-void VulkanApplication::CreatePipelineLayouts()
+void VulkanApplication::CreateDeferredPipelineLayout()
 {
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1029,6 +1009,18 @@ void VulkanApplication::CreatePipelineLayouts()
 	{
 		throw std::runtime_error("Failed to create deferred pipeline layout");
 	}
+}
+
+void VulkanApplication::CreateGeometryPipelineLayout()
+{
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+	pipelineLayoutInfo.pNext = nullptr;
+	pipelineLayoutInfo.flags = 0;
 
 	// Geometry layout
 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &geometryPipelineLayout) != VK_SUCCESS)
@@ -1560,11 +1552,12 @@ void VulkanApplication::AllocateGeometryCommandBuffer()
 	scissor.offset = { 0, 0 };
 	vkCmdSetScissor(geometryCommandBuffer, 0, 1, &scissor);
 
+	// Bind the pipeline
+	geometryPipeline = CreateGeometryPipeline();
+	vkCmdBindPipeline(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipeline);
+
 	// Bind descriptor sets
 	vkCmdBindDescriptorSets(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipelineLayout, 0, 1, &geometryDescriptorSet, 0, nullptr);
-
-	// Bind the pipeline
-	vkCmdBindPipeline(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, CreateGeometryGraphicsPipeline());
 
 	// Bind geometry buffers
 	VkDeviceSize offsets[1] = { 0 };
