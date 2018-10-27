@@ -312,22 +312,27 @@ private:
 
 #pragma region Graphics Pipeline Objects
 	VkPipeline deferredPipeline;
+	VkPipeline geometryPipeline;
 	VkPipelineCache pipelineCache;
 	VkPipelineLayout deferredPipelineLayout;
+	VkPipelineLayout geometryPipelineLayout;
 	VkRenderPass deferredRenderPass;
 #pragma endregion
 
 #pragma region Drawing Objects
 	std::vector<VkFramebuffer> swapChainFramebuffers;
+	FrameBuffer gBuffer;
 	std::vector<VkSemaphore> imageAvailableSemaphores;
 	std::vector<VkSemaphore> renderFinishedSemaphores;
 	std::vector<VkFence> inFlightFences; // Sync objects to prevent CPU submitting too many frames at once
+	VkSemaphore geometryPassSemaphore;
 	size_t currentFrame = 0;
 	bool framebufferResized = false;
 #pragma endregion
 
 #pragma region Command Buffer Objects
 	std::vector<VkCommandBuffer> deferredCommandBuffers;
+	VkCommandBuffer geometryCommandBuffer;
 	VkCommandPool commandPool;
 #pragma endregion
 
@@ -341,10 +346,16 @@ private:
 	VmaAllocator allocator;
 	VkBuffer vertexBuffer;
 	VkBuffer indexBuffer;
-	std::vector<VkBuffer> uniformBuffers;
 	VmaAllocation indexBufferAllocation;
 	VmaAllocation vertexBufferAllocation;
+	VkBuffer fsQuadVertexBuffer;
+	VkBuffer fsQuadIndexBuffer;
+	VmaAllocation fsQuadVertexMemory;
+	VmaAllocation fsQuadIndexMemory;
+	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VmaAllocation> uniformBufferAllocations;
+	VkBuffer geometryUniformBuffer;
+	VmaAllocation geometryUniformBufferAllocation;
 #pragma endregion
 
 #pragma region Texture Objects 
@@ -352,6 +363,7 @@ private:
 	VmaAllocation textureImageMemory;
 	VkImageView textureImageView;
 	VkSampler textureSampler;
+	VkSampler gBufferSampler;
 #pragma endregion
 
 #pragma region Model Objects
@@ -364,21 +376,6 @@ private:
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> deferredDescriptorSets;
 	VkDescriptorSet geometryDescriptorSet;
-#pragma endregion
-
-#pragma region Deferred Rendering Objects
-	VkPipeline geometryPipeline;
-	VkPipelineLayout geometryPipelineLayout;
-	VkBuffer geometryUniformBuffer;
-	VmaAllocation geometryUniformBufferAllocation;
-	FrameBuffer gBuffer;
-	VkSampler gBufferSampler;
-	VkSemaphore geometryPassSemaphore;
-	VkCommandBuffer geometryCommandBuffer;
-	VkBuffer fsQuadVertexBuffer;
-	VkBuffer fsQuadIndexBuffer;
-	VmaAllocation fsQuadVertexMemory;
-	VmaAllocation fsQuadIndexMemory;
 #pragma endregion
 };
 
