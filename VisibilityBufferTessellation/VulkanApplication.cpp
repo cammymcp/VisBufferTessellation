@@ -35,6 +35,7 @@ void VulkanApplication::InitVulkan()
 	CreateDeferredRenderPass();
 	CreateDescriptorSetLayout();
 	CreatePipelineCache();
+	CreateGeometryPipeline();
 	CreateDeferredPipeline();
 	CreateTextureImage();
 	CreateTextureImageView();
@@ -97,10 +98,9 @@ void VulkanApplication::CleanUp()
 	// Destroy vertex and index buffers
 	vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferAllocation);
 	vmaDestroyBuffer(allocator, indexBuffer, indexBufferAllocation);
+	vmaDestroyBuffer(allocator, fsQuadVertexBuffer, fsQuadVertexMemory);
+	vmaDestroyBuffer(allocator, fsQuadIndexBuffer, fsQuadIndexMemory);
 	vmaDestroyAllocator(allocator);
-
-	// Destroy Pipeline Cache
-	vkDestroyPipelineCache(device, pipelineCache, nullptr);
 
 	// Destroy Sync Objects
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
@@ -509,6 +509,7 @@ void VulkanApplication::RecreateSwapChain()
 	CreateImageViews();
 	CreateGeometryRenderPass();
 	CreateDeferredRenderPass();
+	CreateGeometryPipeline();
 	CreateDeferredPipeline();
 	CreateDepthResources();
 	CreateFrameBuffers();
@@ -570,6 +571,7 @@ void VulkanApplication::CleanUpSwapChain()
 	vkDestroyPipeline(device, geometryPipeline, nullptr);
 	vkDestroyPipelineLayout(device, deferredPipelineLayout, nullptr);
 	vkDestroyPipelineLayout(device, geometryPipelineLayout, nullptr);
+	vkDestroyPipelineCache(device, pipelineCache, nullptr);
 	vkDestroyRenderPass(device, deferredRenderPass, nullptr);
 	vkDestroyRenderPass(device, gBuffer.renderPass, nullptr);
 	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
@@ -822,7 +824,7 @@ void VulkanApplication::CreateDeferredPipeline()
 	vkDestroyShaderModule(device, fragShaderModule, nullptr);
 }
 
-VkPipeline VulkanApplication::CreateGeometryPipeline()
+void VulkanApplication::CreateGeometryPipeline()
 {
 	// Create geometry shader stages from compiled shader code
 	auto vertShaderCode = ReadFile("shaders/geometry.vert.spv");
@@ -970,17 +972,14 @@ VkPipeline VulkanApplication::CreateGeometryPipeline()
 	pipelineInfo.basePipelineIndex = -1;
 
 	// Now create the geometry pass pipeline
-	VkPipeline pipeline;
-	if (vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS)
+	if (vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &geometryPipeline) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create deferred pipeline");
+		throw std::runtime_error("Failed to create geometry pipeline");
 	}
 
 	// Clean up shader module objects
 	vkDestroyShaderModule(device, vertShaderModule, nullptr);
 	vkDestroyShaderModule(device, fragShaderModule, nullptr);
-
-	return pipeline;
 }
 
 void VulkanApplication::CreatePipelineCache()
@@ -1553,7 +1552,6 @@ void VulkanApplication::AllocateGeometryCommandBuffer()
 	vkCmdSetScissor(geometryCommandBuffer, 0, 1, &scissor);
 
 	// Bind the pipeline
-	geometryPipeline = CreateGeometryPipeline();
 	vkCmdBindPipeline(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipeline);
 
 	// Bind descriptor sets
@@ -1634,42 +1632,45 @@ void VulkanApplication::CreateFullScreenQuad()
 	quadVertexBuffer.push_back({ {-1.0f,-1.0f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }); // Top Left
 
 	// Create staging buffer on host memory
-	VkBuffer stagingBuffer;
-	VmaAllocation stagingBufferAllocation;
+	VkBuffer vertexStagingBuffer;
+	VmaAllocation vertexStagingBufferAllocation;
 	VkDeviceSize bufferSize = quadVertexBuffer.size() * sizeof(QuadVertex);
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferAllocation);
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vertexStagingBuffer, vertexStagingBufferAllocation);
 
 	// Map vertex data to staging buffer memory allocation
 	void* mappedVertexData;
-	vmaMapMemory(allocator, stagingBufferAllocation, &mappedVertexData);
+	vmaMapMemory(allocator, vertexStagingBufferAllocation, &mappedVertexData);
 	memcpy(mappedVertexData, quadVertexBuffer.data(), (size_t)bufferSize);
-	vmaUnmapMemory(allocator, stagingBufferAllocation);
+	vmaUnmapMemory(allocator, vertexStagingBufferAllocation);
 
 	// Create vertex buffer on device local memory
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, fsQuadVertexBuffer, fsQuadVertexMemory);
 
 	// Copy data to new vertex buffer
-	CopyBuffer(stagingBuffer, fsQuadVertexBuffer, bufferSize);
+	CopyBuffer(vertexStagingBuffer, fsQuadVertexBuffer, bufferSize);
 
 	// Set up indices
+	VkBuffer indexStagingBuffer;
+	VmaAllocation indexStagingBufferAllocation;
 	std::vector<uint16_t> quadIndexBuffer = { 1, 0, 2,  2, 3, 0 };
 	bufferSize = sizeof(quadIndexBuffer[0]) * quadIndexBuffer.size();
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferAllocation);
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, indexStagingBuffer, indexStagingBufferAllocation);
 
 	// Map vertex data to staging buffer memory allocation
 	void* mappedIndexData;
-	vmaMapMemory(allocator, stagingBufferAllocation, &mappedIndexData);
+	vmaMapMemory(allocator, indexStagingBufferAllocation, &mappedIndexData);
 	memcpy(mappedIndexData, quadIndexBuffer.data(), (size_t)bufferSize);
-	vmaUnmapMemory(allocator, stagingBufferAllocation);
+	vmaUnmapMemory(allocator, indexStagingBufferAllocation);
 
 	// Create index buffer on device local memory
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, fsQuadIndexBuffer, fsQuadIndexMemory);
 
 	// Copy data to new index buffer
-	CopyBuffer(stagingBuffer, fsQuadIndexBuffer, bufferSize);
+	CopyBuffer(indexStagingBuffer, fsQuadIndexBuffer, bufferSize);
 
-	// Clean up staging buffer
-	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAllocation);
+	// Clean up staging buffers
+	vmaDestroyBuffer(allocator, vertexStagingBuffer, vertexStagingBufferAllocation);
+	vmaDestroyBuffer(allocator, indexStagingBuffer, indexStagingBufferAllocation);
 }
 #pragma endregion
 

@@ -212,7 +212,7 @@ private:
 
 #pragma region Graphics Pipeline Functions
 	void CreateDeferredPipeline();
-	VkPipeline CreateGeometryPipeline();
+	void CreateGeometryPipeline();
 	void CreatePipelineCache();
 	void CreateDeferredPipelineLayout();
 	void CreateGeometryPipelineLayout();
