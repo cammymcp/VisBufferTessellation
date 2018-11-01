@@ -1079,7 +1079,7 @@ void VulkanApplication::CreateGeometryRenderPass()
 	subpass.pDepthStencilAttachment = &depthReference;
 
 	// Use subpass dependencies for attachment layout transitions
-	std::array<VkSubpassDependency, 2> dependencies;
+	std::array<VkSubpassDependency, 2> dependencies = {};
 	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	dependencies[0].dstSubpass = 0;
 	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -1154,7 +1154,7 @@ void VulkanApplication::CreateDeferredRenderPass()
 	subpassDescription.pResolveAttachments = nullptr;
 
 	// Subpass dependencies for layout transitions
-	std::array<VkSubpassDependency, 2> dependencies;
+	std::array<VkSubpassDependency, 2> dependencies = {};
 
 	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	dependencies[0].dstSubpass = 0;
@@ -1209,7 +1209,7 @@ VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& co
 void VulkanApplication::CreateFrameBuffers()
 {
 	// Create gBuffer
-	std::array<VkImageView, 4> attachments;
+	std::array<VkImageView, 4> attachments = {};
 	attachments[0] = gBuffer.position.imageView;
 	attachments[1] = gBuffer.normal.imageView;
 	attachments[2] = gBuffer.colour.imageView;
@@ -1515,7 +1515,7 @@ void VulkanApplication::AllocateGeometryCommandBuffer()
 	}
 
 	// Set up clear values for each attachment
-	std::array<VkClearValue, 4> clearValues;
+	std::array<VkClearValue, 4> clearValues = {};
 	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
@@ -1634,39 +1634,39 @@ void VulkanApplication::CreateFullScreenQuad()
 	// Create staging buffer on host memory
 	VkBuffer vertexStagingBuffer;
 	VmaAllocation vertexStagingBufferAllocation;
-	VkDeviceSize bufferSize = quadVertexBuffer.size() * sizeof(QuadVertex);
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vertexStagingBuffer, vertexStagingBufferAllocation);
+	VkDeviceSize vertexBufferSize = quadVertexBuffer.size() * sizeof(QuadVertex);
+	CreateBuffer(vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vertexStagingBuffer, vertexStagingBufferAllocation);
 
 	// Map vertex data to staging buffer memory allocation
 	void* mappedVertexData;
 	vmaMapMemory(allocator, vertexStagingBufferAllocation, &mappedVertexData);
-	memcpy(mappedVertexData, quadVertexBuffer.data(), (size_t)bufferSize);
+	memcpy(mappedVertexData, quadVertexBuffer.data(), (size_t)vertexBufferSize);
 	vmaUnmapMemory(allocator, vertexStagingBufferAllocation);
 
 	// Create vertex buffer on device local memory
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, fsQuadVertexBuffer, fsQuadVertexMemory);
+	CreateBuffer(vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, fsQuadVertexBuffer, fsQuadVertexMemory);
 
 	// Copy data to new vertex buffer
-	CopyBuffer(vertexStagingBuffer, fsQuadVertexBuffer, bufferSize);
+	CopyBuffer(vertexStagingBuffer, fsQuadVertexBuffer, vertexBufferSize);
 
 	// Set up indices
 	VkBuffer indexStagingBuffer;
 	VmaAllocation indexStagingBufferAllocation;
 	std::vector<uint16_t> quadIndexBuffer = { 1, 0, 2,  2, 3, 0 };
-	bufferSize = sizeof(quadIndexBuffer[0]) * quadIndexBuffer.size();
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, indexStagingBuffer, indexStagingBufferAllocation);
+	VkDeviceSize indexBufferSize = sizeof(uint16_t) * quadIndexBuffer.size();
+	CreateBuffer(indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, indexStagingBuffer, indexStagingBufferAllocation);
 
 	// Map vertex data to staging buffer memory allocation
 	void* mappedIndexData;
 	vmaMapMemory(allocator, indexStagingBufferAllocation, &mappedIndexData);
-	memcpy(mappedIndexData, quadIndexBuffer.data(), (size_t)bufferSize);
+	memcpy(mappedIndexData, quadIndexBuffer.data(), (size_t)indexBufferSize);
 	vmaUnmapMemory(allocator, indexStagingBufferAllocation);
 
 	// Create index buffer on device local memory
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, fsQuadIndexBuffer, fsQuadIndexMemory);
+	CreateBuffer(indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, fsQuadIndexBuffer, fsQuadIndexMemory);
 
 	// Copy data to new index buffer
-	CopyBuffer(indexStagingBuffer, fsQuadIndexBuffer, bufferSize);
+	CopyBuffer(indexStagingBuffer, fsQuadIndexBuffer, indexBufferSize);
 
 	// Clean up staging buffers
 	vmaDestroyBuffer(allocator, vertexStagingBuffer, vertexStagingBufferAllocation);

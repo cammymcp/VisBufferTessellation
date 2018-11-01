@@ -290,7 +290,6 @@ private:
 #pragma endregion
 
 	// Objects
-
 #pragma region Core Objects
 	GLFWwindow* window;
 	VkInstance instance;
