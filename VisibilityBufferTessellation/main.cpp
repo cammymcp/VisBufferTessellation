@@ -2,10 +2,9 @@
 #include <stdexcept>
 #include "VulkanApplication.h"
 
-
 int main()
 {
-	VulkanApplication application;
+	vbt::VulkanApplication application;
 
 	try
 	{
