@@ -14,11 +14,12 @@
 #pragma region Required Validation Layers
 const std::vector<const char*> validationLayers =
 {
-	"VK_LAYER_LUNARG_standard_validation"
+	"VK_LAYER_LUNARG_standard_validation",
+	"VK_LAYER_RENDERDOC_Capture"
 };
 
 #ifdef NDEBUG
-const bool enableValidationLayers = false;
+const bool enableValidationLayers = true;
 #else
 const bool enableValidationLayers = true;
 #endif
@@ -68,7 +69,7 @@ namespace vbt
 		void Init(GLFWwindow* window);
 		void CleanUp(); 
 		void RecreateSwapChain(GLFWwindow* window);
-		static VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+		static VkImageView CreateImageView(const VkDevice &device, VkImage &image, VkFormat format, VkImageAspectFlags aspectFlags);
 		QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 
 		// Getters

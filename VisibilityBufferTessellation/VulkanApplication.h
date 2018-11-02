@@ -200,7 +200,8 @@ namespace vbt
 #pragma endregion
 
 #pragma region Descriptor Functions
-		void CreateDescriptorSetLayout();
+		void CreateDeferredDescriptorSetLayout();
+		void CreateGeometryDescriptorSetLayout();
 		void CreateDescriptorPool();
 		void CreateDescriptorSets();
 #pragma endregion
@@ -213,7 +214,7 @@ namespace vbt
 		// Handles and Containers
 #pragma region Core Objects
 		GLFWwindow* window;
-		vbt::VulkanCore vulkan;
+		vbt::VulkanCore* vulkan;
 #pragma endregion
 
 #pragma region Graphics Pipeline Objects
@@ -278,7 +279,8 @@ namespace vbt
 #pragma endregion
 
 #pragma region Descriptor Objects
-		VkDescriptorSetLayout descriptorSetLayout;
+		VkDescriptorSetLayout deferredDescriptorSetLayout;
+		VkDescriptorSetLayout geometryDescriptorSetLayout;
 		VkDescriptorPool descriptorPool;
 		std::vector<VkDescriptorSet> deferredDescriptorSets;
 		VkDescriptorSet geometryDescriptorSet;
