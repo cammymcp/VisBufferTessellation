@@ -161,10 +161,12 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="VulkanApplication.cpp" />
+    <ClCompile Include="VulkanCore.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="vk_mem_alloc.h" />
     <ClInclude Include="VulkanApplication.h" />
+    <ClInclude Include="VulkanCore.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\deferred.frag" />

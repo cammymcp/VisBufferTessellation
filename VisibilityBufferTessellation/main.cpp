@@ -2,10 +2,9 @@
 #include <stdexcept>
 #include "VulkanApplication.h"
 
-
 int main()
 {
-	VulkanApplication application;
+	vbt::VulkanApplication application;
 
 	try
 	{
@@ -16,6 +15,6 @@ int main()
 		std::cerr << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
-
+	//std::getchar();
 	return EXIT_SUCCESS;
 }
