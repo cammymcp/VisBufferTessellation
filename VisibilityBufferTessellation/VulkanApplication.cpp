@@ -14,6 +14,7 @@ void VulkanApplication::InitWindow()
 	// Init glfw and do not create an OpenGL context
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 	// Create window
 	window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
@@ -49,7 +50,6 @@ void VulkanApplication::Init()
 	CreateDescriptorSets();
 	AllocateDeferredCommandBuffers();
 	AllocateGeometryCommandBuffer();
-	CreateSynchronisationObjects();
 }
 
 void VulkanApplication::Update()
@@ -101,13 +101,7 @@ void VulkanApplication::CleanUp()
 	vmaDestroyBuffer(allocator, fsQuadIndexBuffer, fsQuadIndexMemory);
 	vmaDestroyAllocator(allocator);
 
-	// Destroy Sync Objects
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		vkDestroySemaphore(vulkan->Device(), renderFinishedSemaphores[i], nullptr);
-		vkDestroySemaphore(vulkan->Device(), imageAvailableSemaphores[i], nullptr);
-		vkDestroyFence(vulkan->Device(), inFlightFences[i], nullptr);
-	}
+	// Destroy geometry pass semaphore
 	vkDestroySemaphore(vulkan->Device(), geometryPassSemaphore, nullptr);
 
 	// Destroy command pool
@@ -778,11 +772,12 @@ void VulkanApplication::CreateFrameBufferAttachment(VkFormat format, VkImageUsag
 void VulkanApplication::DrawFrame()
 {
 	// Wait for previous frame to finish
-	vkWaitForFences(vulkan->Device(), 1, &inFlightFences[currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
+	vkWaitForFences(vulkan->Device(), 1, &vulkan->Fences()[currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
 
 	// Acquire image from swap chain. ImageAvailableSemaphore will be signaled when the image is ready to be drawn to. Check if we have to recreate the swap chain
 	uint32_t imageIndex;
-	VkResult result = vkAcquireNextImageKHR(vulkan->Device(), vulkan->SwapChain(), std::numeric_limits<uint64_t>::max(), imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+	VkSemaphore imageAvailableSemaphore = vulkan->ImageAvailableSemaphores()[currentFrame];
+	VkResult result = vkAcquireNextImageKHR(vulkan->Device(), vulkan->SwapChain(), std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR)
 	{
 		RecreateSwapChain();
@@ -794,7 +789,7 @@ void VulkanApplication::DrawFrame()
 	}
 
 	// We reset fences here in the case that the swap chain needs rebuilding
-	vkResetFences(vulkan->Device(), 1, &inFlightFences[currentFrame]);
+	vkResetFences(vulkan->Device(), 1, &vulkan->Fences()[currentFrame]);
 
 	// Update the uniform buffer
 	UpdateDeferredUniformBuffer(imageIndex);
@@ -809,7 +804,7 @@ void VulkanApplication::DrawFrame()
 
 	// Wait for image to be available, and signal when g-buffer is filled
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &imageAvailableSemaphores[currentFrame];
+	submitInfo.pWaitSemaphores = &imageAvailableSemaphore;
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &geometryPassSemaphore;
 
@@ -824,12 +819,13 @@ void VulkanApplication::DrawFrame()
 
 	/// DEFERRED PASS =======================================================================================
 	// Wait for g-buffer being filled, signal when rendering is complete
+	VkSemaphore renderFinishedSemaphore = vulkan->RenderFinishedSemaphores()[currentFrame];
 	submitInfo.pWaitSemaphores = &geometryPassSemaphore;
-	submitInfo.pSignalSemaphores = &renderFinishedSemaphores[currentFrame];
+	submitInfo.pSignalSemaphores = &renderFinishedSemaphore;
 
 	// Submit to queue
 	submitInfo.pCommandBuffers = &deferredCommandBuffers[imageIndex];
-	if (vkQueueSubmit(vulkan->Queues().graphics, 1, &submitInfo, inFlightFences[currentFrame]) != VK_SUCCESS)
+	if (vkQueueSubmit(vulkan->Queues().graphics, 1, &submitInfo, vulkan->Fences()[currentFrame]) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to submit draw command buffer");
 	}
@@ -840,7 +836,7 @@ void VulkanApplication::DrawFrame()
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &renderFinishedSemaphores[currentFrame]; // Wait for deferred pass to finish
+	presentInfo.pWaitSemaphores = &renderFinishedSemaphore; // Wait for deferred pass to finish
 
 	VkSwapchainKHR swapChains[] = { vulkan->SwapChain() };
 	presentInfo.swapchainCount = 1;
@@ -861,32 +857,6 @@ void VulkanApplication::DrawFrame()
 
 	// Progress the current frame
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-}
-
-// We'll need to set up semaphores to ensure the order of the asynchronous functions
-void VulkanApplication::CreateSynchronisationObjects()
-{
-	imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-	renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-	inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-
-	VkSemaphoreCreateInfo semaphoreInfo = {};
-	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-	VkFenceCreateInfo fenceInfo = {};
-	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Signal the fence so that the first frame is rendered
-
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		if (vkCreateSemaphore(vulkan->Device(), &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
-			vkCreateSemaphore(vulkan->Device(), &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
-			vkCreateFence(vulkan->Device(), &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS)
-		{
-
-			throw std::runtime_error("Failed to create syncrhonisation objects for a frame");
-		}
-	}
 }
 #pragma endregion
 

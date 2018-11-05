@@ -17,7 +17,6 @@
 #include <glm/gtx/hash.hpp>
 
 #pragma region Constants
-const int MAX_FRAMES_IN_FLIGHT = 1;
 const int WIDTH = 800;
 const int HEIGHT = 600;
 const std::string MODEL_PATH = "models/chalet.obj";
@@ -153,7 +152,6 @@ namespace vbt
 		void CreateFrameBuffers();
 		void CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, FrameBufferAttachment* attachment);
 		void DrawFrame();
-		void CreateSynchronisationObjects();
 #pragma endregion
 
 #pragma region Command Buffer Functions
@@ -229,9 +227,6 @@ namespace vbt
 #pragma region Drawing Objects
 		std::vector<VkFramebuffer> swapChainFramebuffers;
 		FrameBuffer gBuffer;
-		std::vector<VkSemaphore> imageAvailableSemaphores;
-		std::vector<VkSemaphore> renderFinishedSemaphores;
-		std::vector<VkFence> inFlightFences; // Sync objects to prevent CPU submitting too many frames at once
 		VkSemaphore geometryPassSemaphore;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;

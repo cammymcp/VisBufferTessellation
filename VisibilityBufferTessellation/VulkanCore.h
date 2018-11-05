@@ -11,6 +11,10 @@
 #include <algorithm>
 #include <iostream>
 
+#pragma region Constants
+const int MAX_FRAMES_IN_FLIGHT = 1; 
+#pragma endregion
+
 #pragma region Required Validation Layers
 const std::vector<const char*> validationLayers =
 {
@@ -83,6 +87,9 @@ namespace vbt
 		VkExtent2D SwapChainExtent() const { return swapChainExtent; }
 		VkFormat SwapChainImageFormat() const { return swapChainImageFormat; }
 		DeviceQueues Queues() const { return queues; }
+		std::vector<VkSemaphore> ImageAvailableSemaphores() const { return imageAvailableSemaphores; }
+		std::vector<VkSemaphore> RenderFinishedSemaphores() const { return renderFinishedSemaphores; }
+		std::vector<VkFence> Fences() const { return inFlightFences; }
 
 	private:
 		// Instance Functions
@@ -109,6 +116,7 @@ namespace vbt
 		void CreateSurface(GLFWwindow* window);
 		void CreateSwapChain(GLFWwindow* window);
 		void CreateSwapChainImageViews();
+		void CreateSynchronisationObjects();
 		SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
 		VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 		VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR> availablePresentModes);
@@ -123,12 +131,15 @@ namespace vbt
 		VkSurfaceKHR surface; // Interface into window system 
 		VkSwapchainKHR swapChain;
 		VkFormat swapChainImageFormat;
-		VkExtent2D swapChainExtent;
+		VkExtent2D swapChainExtent; 
+		std::vector<VkSemaphore> imageAvailableSemaphores;
+		std::vector<VkSemaphore> renderFinishedSemaphores;
+		std::vector<VkFence> inFlightFences; // Sync objects to prevent CPU submitting too many frames at once
 
 		// Core containers
 		std::vector<VkImage> swapChainImages;
 		std::vector<VkImageView> swapChainImageViews;
 	};  
-}
+} 
 
 #endif // !VULKANCORE_H
