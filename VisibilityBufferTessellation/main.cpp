@@ -15,6 +15,6 @@ int main()
 		std::cerr << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
-	//std::getchar();
+	std::getchar();
 	return EXIT_SUCCESS;
 }

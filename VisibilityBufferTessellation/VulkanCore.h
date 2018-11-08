@@ -32,8 +32,8 @@ const bool enableValidationLayers = true;
 #pragma region Required Extensions
 const std::vector<const char*> deviceExtensions
 {
-	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-	"VK_NV_fragment_shader_barycentric" // nVidia extension for accessing barycentric coords in the fragment shader 
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME/*,
+	"VK_NV_fragment_shader_barycentric" // nVidia extension for accessing barycentric coords in the fragment shader */
 };
 #pragma endregion
 

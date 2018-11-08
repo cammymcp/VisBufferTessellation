@@ -519,7 +519,7 @@ void VulkanApplication::CreateVisBuffWritePipelineLayout()
 void VulkanApplication::CreateVisBuffWriteRenderPass()
 {
 	// Create gBuffer attachments
-	CreateFrameBufferAttachment(VK_FORMAT_R32G32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visAndBarys);
+	CreateFrameBufferAttachment(VK_FORMAT_R32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visAndBarys);
 	CreateFrameBufferAttachment(VK_FORMAT_R32G32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.uvDerivs);
 	CreateDepthResources();
 
