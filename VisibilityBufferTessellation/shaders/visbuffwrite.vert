@@ -4,7 +4,6 @@
 
 // In
 layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec3 inColour;
 layout(location = 2) in vec2 texCoords;
 
 // Descriptors
@@ -15,9 +14,9 @@ layout(binding = 0) uniform UniformBufferObject {
 } ubo;
 
 // Out
-layout(location = 0) out vec3 outColour;
-layout(location = 1) out vec2 outTexCoord;
-layout(location = 2) out vec3 outWorldPos;
+layout(location = 0) out vec2 outTexCoord;
+layout(location = 1) flat out vec4 vertexPos; // Position of this vertex, not to be interpolated for barycentric coord calculations
+layout(location = 2)	  out vec4 fragPos; // Temporarily filled with the vertex position. WILL be interpolated to fragment position
 out gl_PerVertex
 {
 	vec4 gl_Position;
@@ -26,15 +25,10 @@ out gl_PerVertex
 void main() 
 {
 	// Screen Position
-    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
-
-	// World space vertex position
-	outWorldPos = vec3(ubo.model * vec4(inPosition, 1.0));
-	// GL to Vulkan coord space
-	outWorldPos.y = -outWorldPos.y;
-
-	// Colour
-    outColour = inColour;
+	vec4 vertScreenPos = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
+    gl_Position = vertScreenPos;
+	vertexPos = vertScreenPos;
+	fragPos = vertScreenPos; // Temporary
 	
 	// Tex
 	outTexCoord = texCoords;

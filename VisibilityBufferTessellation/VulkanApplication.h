@@ -33,11 +33,10 @@ struct FrameBufferAttachment
 	VmaAllocation imageMemory;
 	VkFormat format;
 };
-struct FrameBuffer
+struct VisibilityBuffer
 {
 	VkFramebuffer frameBuffer;
-	FrameBufferAttachment position, normal, colour, depth;
-	VkRenderPass renderPass;
+	FrameBufferAttachment visAndBarys, uvDerivs, depth;
 };
 #pragma endregion
 
@@ -139,11 +138,11 @@ namespace vbt
 
 #pragma region Graphics Pipeline Functions
 		void CreateDeferredPipeline();
-		void CreateGeometryPipeline();
+		void CreateVisBuffWritePipeline();
 		void CreatePipelineCache();
 		void CreateDeferredPipelineLayout();
-		void CreateGeometryPipelineLayout();
-		void CreateGeometryRenderPass();
+		void CreateVisBuffWritePipelineLayout();
+		void CreateVisBuffWriteRenderPass();
 		void CreateDeferredRenderPass();
 		VkShaderModule CreateShaderModule(const std::vector<char>& code);
 #pragma endregion
@@ -157,7 +156,7 @@ namespace vbt
 #pragma region Command Buffer Functions
 		void CreateCommandPool();
 		void AllocateDeferredCommandBuffers();
-		void AllocateGeometryCommandBuffer();
+		void AllocateVisBuffWriteCommandBuffer();
 		VkCommandBuffer BeginSingleTimeCommands();
 		void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 #pragma endregion
@@ -176,8 +175,8 @@ namespace vbt
 		void CreateVertexBuffer();
 		void CreateIndexBuffer();
 		void CreateUniformBuffers();
-		void UpdateDeferredUniformBuffer(uint32_t currentImage);
-		void UpdateGeometryUniformBuffer();
+		void UpdateQuadUniformBuffer(uint32_t currentImage);
+		void UpdateMVPUniformBuffer();
 		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage allocUsage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VmaAllocation& allocation);
 		void CreateVmaAllocator();
 		void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
@@ -187,7 +186,7 @@ namespace vbt
 		void CreateTextureImage();
 		void CreateTextureImageView();
 		void CreateTextureSampler();
-		void CreateGBufferSampler();
+		void CreateDepthSampler();
 		void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkMemoryPropertyFlags properties, VkImage& image, VmaAllocation& allocation);
 		void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout srcLayout, VkImageLayout dstLayout);
 		void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
@@ -198,10 +197,11 @@ namespace vbt
 #pragma endregion
 
 #pragma region Descriptor Functions
-		void CreateDeferredDescriptorSetLayout();
-		void CreateGeometryDescriptorSetLayout();
 		void CreateDescriptorPool();
-		void CreateDescriptorSets();
+		void CreateShadePassDescriptorSetLayout();
+		void CreateWritePassDescriptorSetLayout();
+		void CreateShadePassDescriptorSets(); 
+		void CreateWritePassDescriptorSet();
 #pragma endregion
 
 #pragma region Other Functions
@@ -217,24 +217,25 @@ namespace vbt
 
 #pragma region Graphics Pipeline Objects
 		VkPipeline deferredPipeline;
-		VkPipeline geometryPipeline;
+		VkPipeline visBuffWritePipeline;
 		VkPipelineCache pipelineCache;
 		VkPipelineLayout deferredPipelineLayout;
-		VkPipelineLayout geometryPipelineLayout;
+		VkPipelineLayout visBuffWritePipelineLayout;
+		VkRenderPass visBuffWriteRenderPass;
 		VkRenderPass deferredRenderPass;
 #pragma endregion
 
 #pragma region Drawing Objects
 		std::vector<VkFramebuffer> swapChainFramebuffers;
-		FrameBuffer gBuffer;
-		VkSemaphore geometryPassSemaphore;
+		VisibilityBuffer visibilityBuffer;
+		VkSemaphore visBuffWriteSemaphore;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;
 #pragma endregion
 
 #pragma region Command Buffer Objects
 		std::vector<VkCommandBuffer> deferredCommandBuffers;
-		VkCommandBuffer geometryCommandBuffer;
+		VkCommandBuffer visBuffWriteCommandBuffer;
 		VkCommandPool commandPool;
 #pragma endregion
 
@@ -254,10 +255,10 @@ namespace vbt
 		VkBuffer fsQuadIndexBuffer;
 		VmaAllocation fsQuadVertexMemory;
 		VmaAllocation fsQuadIndexMemory;
-		std::vector<VkBuffer> uniformBuffers;
-		std::vector<VmaAllocation> uniformBufferAllocations;
-		VkBuffer geometryUniformBuffer;
-		VmaAllocation geometryUniformBufferAllocation;
+		std::vector<VkBuffer> quadUniformBuffers;
+		std::vector<VmaAllocation> quadUniformBufferAllocations;
+		VkBuffer mvpUniformBuffer;
+		VmaAllocation mvpUniformBufferAllocation;
 #pragma endregion
 
 #pragma region Texture Objects 
@@ -265,7 +266,7 @@ namespace vbt
 		VmaAllocation textureImageMemory;
 		VkImageView textureImageView;
 		VkSampler textureSampler;
-		VkSampler gBufferSampler;
+		VkSampler depthSampler;
 #pragma endregion
 
 #pragma region Model Objects
@@ -274,11 +275,11 @@ namespace vbt
 #pragma endregion
 
 #pragma region Descriptor Objects
-		VkDescriptorSetLayout deferredDescriptorSetLayout;
-		VkDescriptorSetLayout geometryDescriptorSetLayout;
 		VkDescriptorPool descriptorPool;
-		std::vector<VkDescriptorSet> deferredDescriptorSets;
-		VkDescriptorSet geometryDescriptorSet;
+		std::vector<VkDescriptorSet> shadePassDescriptorSets;
+		VkDescriptorSetLayout shadePassDescriptorSetLayout;
+		VkDescriptorSet writePassDescriptorSet;
+		VkDescriptorSetLayout writePassDescriptorSetLayout;
 #pragma endregion
 	};
 }

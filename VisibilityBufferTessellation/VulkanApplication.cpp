@@ -29,17 +29,17 @@ void VulkanApplication::Init()
 	vulkan->Init(window);
 	CreateVmaAllocator();
 	CreateCommandPool();
-	CreateGeometryRenderPass();
+	CreateVisBuffWriteRenderPass();
 	CreateDeferredRenderPass();
-	CreateGeometryDescriptorSetLayout();
-	CreateDeferredDescriptorSetLayout();
+	CreateShadePassDescriptorSetLayout();
+	CreateWritePassDescriptorSetLayout();
 	CreatePipelineCache();
-	CreateGeometryPipeline();
+	CreateVisBuffWritePipeline();
 	CreateDeferredPipeline();
 	CreateTextureImage();
 	CreateTextureImageView();
 	CreateTextureSampler();
-	CreateGBufferSampler();
+	CreateDepthSampler();
 	LoadModel();
 	CreateVertexBuffer();
 	CreateIndexBuffer();
@@ -47,9 +47,10 @@ void VulkanApplication::Init()
 	CreateUniformBuffers();
 	CreateDescriptorPool();
 	CreateFrameBuffers();
-	CreateDescriptorSets();
+	CreateShadePassDescriptorSets();
+	CreateWritePassDescriptorSet();
 	AllocateDeferredCommandBuffers();
-	AllocateGeometryCommandBuffer();
+	AllocateVisBuffWriteCommandBuffer();
 }
 
 void VulkanApplication::Update()
@@ -70,13 +71,11 @@ void VulkanApplication::CleanUp()
 
 	// Destroy texture objects
 	vkDestroySampler(vulkan->Device(), textureSampler, nullptr);
-	vkDestroySampler(vulkan->Device(), gBufferSampler, nullptr);
-	vkDestroyImageView(vulkan->Device(), gBuffer.position.imageView, nullptr);
-	vmaDestroyImage(allocator, gBuffer.position.image, gBuffer.position.imageMemory);
-	vkDestroyImageView(vulkan->Device(), gBuffer.normal.imageView, nullptr);
-	vmaDestroyImage(allocator, gBuffer.normal.image, gBuffer.normal.imageMemory);
-	vkDestroyImageView(vulkan->Device(), gBuffer.colour.imageView, nullptr);
-	vmaDestroyImage(allocator, gBuffer.colour.image, gBuffer.colour.imageMemory);
+	vkDestroySampler(vulkan->Device(), depthSampler, nullptr);
+	vkDestroyImageView(vulkan->Device(), visibilityBuffer.visAndBarys.imageView, nullptr);
+	vmaDestroyImage(allocator, visibilityBuffer.visAndBarys.image, visibilityBuffer.visAndBarys.imageMemory);
+	vkDestroyImageView(vulkan->Device(), visibilityBuffer.uvDerivs.imageView, nullptr);
+	vmaDestroyImage(allocator, visibilityBuffer.uvDerivs.image, visibilityBuffer.uvDerivs.imageMemory);
 	vkDestroyImageView(vulkan->Device(), textureImageView, nullptr);
 	vmaDestroyImage(allocator, textureImage, textureImageMemory);
 
@@ -84,15 +83,15 @@ void VulkanApplication::CleanUp()
 	vkDestroyDescriptorPool(vulkan->Device(), descriptorPool, nullptr);
 
 	// Destroy descriptor layouts
-	vkDestroyDescriptorSetLayout(vulkan->Device(), deferredDescriptorSetLayout, nullptr);
-	vkDestroyDescriptorSetLayout(vulkan->Device(), geometryDescriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(vulkan->Device(), shadePassDescriptorSetLayout, nullptr);
+	vkDestroyDescriptorSetLayout(vulkan->Device(), writePassDescriptorSetLayout, nullptr);
 
 	// Destroy uniform buffers
 	for (size_t i = 0; i < vulkan->SwapChainImages().size(); i++)
 	{
-		vmaDestroyBuffer(allocator, uniformBuffers[i], uniformBufferAllocations[i]);
+		vmaDestroyBuffer(allocator, quadUniformBuffers[i], quadUniformBufferAllocations[i]);
 	}
-	vmaDestroyBuffer(allocator, geometryUniformBuffer, geometryUniformBufferAllocation);
+	vmaDestroyBuffer(allocator, mvpUniformBuffer, mvpUniformBufferAllocation);
 
 	// Destroy vertex and index buffers
 	vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferAllocation);
@@ -102,7 +101,7 @@ void VulkanApplication::CleanUp()
 	vmaDestroyAllocator(allocator);
 
 	// Destroy geometry pass semaphore
-	vkDestroySemaphore(vulkan->Device(), geometryPassSemaphore, nullptr);
+	vkDestroySemaphore(vulkan->Device(), visBuffWriteSemaphore, nullptr);
 
 	// Destroy command pool
 	vkDestroyCommandPool(vulkan->Device(), commandPool, nullptr);
@@ -136,22 +135,22 @@ void VulkanApplication::RecreateSwapChain()
 
 	// Recreate required objects
 	vulkan->RecreateSwapChain(window);
-	CreateGeometryRenderPass();
+	CreateVisBuffWriteRenderPass();
 	CreateDeferredRenderPass();
 	CreatePipelineCache();
-	CreateGeometryPipeline();
+	CreateVisBuffWritePipeline();
 	CreateDeferredPipeline();
 	CreateDepthResources();
 	CreateFrameBuffers();
 	AllocateDeferredCommandBuffers();
-	AllocateGeometryCommandBuffer();
+	AllocateVisBuffWriteCommandBuffer();
 }
 
 void VulkanApplication::CleanUpSwapChain()
 {
 	// Destroy depth buffers
-	vkDestroyImageView(vulkan->Device(), gBuffer.depth.imageView, nullptr);
-	vmaDestroyImage(allocator, gBuffer.depth.image, gBuffer.depth.imageMemory);
+	vkDestroyImageView(vulkan->Device(), visibilityBuffer.depth.imageView, nullptr);
+	vmaDestroyImage(allocator, visibilityBuffer.depth.image, visibilityBuffer.depth.imageMemory);
 	vkDestroyImageView(vulkan->Device(), deferredDepthImageView, nullptr);
 	vmaDestroyImage(allocator, deferredDepthImage, deferredDepthImageMemory);
 
@@ -160,18 +159,18 @@ void VulkanApplication::CleanUpSwapChain()
 	{
 		vkDestroyFramebuffer(vulkan->Device(), swapChainFramebuffers[i], nullptr);
 	}
-	vkDestroyFramebuffer(vulkan->Device(), gBuffer.frameBuffer, nullptr);
+	vkDestroyFramebuffer(vulkan->Device(), visibilityBuffer.frameBuffer, nullptr);
 
 	// Free command buffers
 	vkFreeCommandBuffers(vulkan->Device(), commandPool, static_cast<uint32_t>(deferredCommandBuffers.size()), deferredCommandBuffers.data());
-	vkFreeCommandBuffers(vulkan->Device(), commandPool, 1, &geometryCommandBuffer);
+	vkFreeCommandBuffers(vulkan->Device(), commandPool, 1, &visBuffWriteCommandBuffer);
 	vkDestroyPipeline(vulkan->Device(), deferredPipeline, nullptr);
-	vkDestroyPipeline(vulkan->Device(), geometryPipeline, nullptr);
+	vkDestroyPipeline(vulkan->Device(), visBuffWritePipeline, nullptr);
 	vkDestroyPipelineLayout(vulkan->Device(), deferredPipelineLayout, nullptr);
-	vkDestroyPipelineLayout(vulkan->Device(), geometryPipelineLayout, nullptr);
+	vkDestroyPipelineLayout(vulkan->Device(), visBuffWritePipelineLayout, nullptr);
 	vkDestroyPipelineCache(vulkan->Device(), pipelineCache, nullptr);
 	vkDestroyRenderPass(vulkan->Device(), deferredRenderPass, nullptr);
-	vkDestroyRenderPass(vulkan->Device(), gBuffer.renderPass, nullptr);
+	vkDestroyRenderPass(vulkan->Device(), visBuffWriteRenderPass, nullptr);
 }
 #pragma endregion
 
@@ -316,11 +315,11 @@ void VulkanApplication::CreateDeferredPipeline()
 	vkDestroyShaderModule(vulkan->Device(), fragShaderModule, nullptr);
 }
 
-void VulkanApplication::CreateGeometryPipeline()
+void VulkanApplication::CreateVisBuffWritePipeline()
 {
-	// Create geometry shader stages from compiled shader code
-	auto vertShaderCode = ReadFile("shaders/geometry.vert.spv");
-	auto fragShaderCode = ReadFile("shaders/geometry.frag.spv");
+	// Create visibility buffer write shader stages from compiled shader code
+	auto vertShaderCode = ReadFile("shaders/visbuffwrite.vert.spv");
+	auto fragShaderCode = ReadFile("shaders/visbuffwrite.frag.spv");
 
 	// Create shader modules
 	VkShaderModule vertShaderModule;
@@ -339,7 +338,7 @@ void VulkanApplication::CreateGeometryPipeline()
 	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	fragShaderStageInfo.module = fragShaderModule;
 	fragShaderStageInfo.pName = "main";
-	VkPipelineShaderStageCreateInfo geometryShaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+	VkPipelineShaderStageCreateInfo visBuffWriteShaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
 	// Set up vertex input format for geometry pass
 	auto bindingDescription = Vertex::GetBindingDescription();
@@ -416,17 +415,14 @@ void VulkanApplication::CreateGeometryPipeline()
 	multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
 	multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
-	// We need to set up color blend attachments for all of the gbuffer color attachments in the subpass (position, normal, albedo)
-	VkPipelineColorBlendAttachmentState posBlendAttachment = {};
-	posBlendAttachment.colorWriteMask = 0xf;
-	posBlendAttachment.blendEnable = VK_FALSE;
-	VkPipelineColorBlendAttachmentState normBlendAttachment = {};
-	normBlendAttachment.colorWriteMask = 0xf;
-	normBlendAttachment.blendEnable = VK_FALSE;
-	VkPipelineColorBlendAttachmentState colBlendAttachment = {};
-	colBlendAttachment.colorWriteMask = 0xf;
-	colBlendAttachment.blendEnable = VK_FALSE;
-	std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachments = { posBlendAttachment, normBlendAttachment, colBlendAttachment };
+	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass (vis and barys, uv derivs)
+	VkPipelineColorBlendAttachmentState visBlendAttachment = {};
+	visBlendAttachment.colorWriteMask = 0xf;
+	visBlendAttachment.blendEnable = VK_FALSE;
+	VkPipelineColorBlendAttachmentState derivsBlendAttachment = {};
+	derivsBlendAttachment.colorWriteMask = 0xf;
+	derivsBlendAttachment.blendEnable = VK_FALSE;
+	std::array<VkPipelineColorBlendAttachmentState, 2> blendAttachments = { visBlendAttachment, derivsBlendAttachment };
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
@@ -442,16 +438,16 @@ void VulkanApplication::CreateGeometryPipeline()
 	dynamicState.flags = 0;
 
 	// PipelineLayout
-	CreateGeometryPipelineLayout();
+	CreateVisBuffWritePipelineLayout();
 
-	// We now have everything we need to create the geometry graphics pipeline
+	// We now have everything we need to create the vis buff write graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.stageCount = 2;
-	pipelineInfo.layout = geometryPipelineLayout;
-	pipelineInfo.renderPass = gBuffer.renderPass;
+	pipelineInfo.layout = visBuffWritePipelineLayout;
+	pipelineInfo.renderPass = visBuffWriteRenderPass;
 	pipelineInfo.subpass = 0; // Index of the sub pass where this pipeline will be used
-	pipelineInfo.pStages = geometryShaderStages;
+	pipelineInfo.pStages = visBuffWriteShaderStages;
 	pipelineInfo.pInputAssemblyState = &inputAssembly;
 	pipelineInfo.pViewportState = &viewportState;
 	pipelineInfo.pRasterizationState = &rasterizer;
@@ -463,10 +459,10 @@ void VulkanApplication::CreateGeometryPipeline()
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 	pipelineInfo.basePipelineIndex = -1;
 
-	// Now create the geometry pass pipeline
-	if (vkCreateGraphicsPipelines(vulkan->Device(), pipelineCache, 1, &pipelineInfo, nullptr, &geometryPipeline) != VK_SUCCESS)
+	// Now create the vis buff write pass pipeline
+	if (vkCreateGraphicsPipelines(vulkan->Device(), pipelineCache, 1, &pipelineInfo, nullptr, &visBuffWritePipeline) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create geometry pipeline");
+		throw std::runtime_error("Failed to create vis buff write pipeline");
 	}
 
 	// Clean up shader module objects
@@ -489,7 +485,7 @@ void VulkanApplication::CreateDeferredPipelineLayout()
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &deferredDescriptorSetLayout;
+	pipelineLayoutInfo.pSetLayouts = &shadePassDescriptorSetLayout;
 	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 	pipelineLayoutInfo.pNext = nullptr;
@@ -502,44 +498,43 @@ void VulkanApplication::CreateDeferredPipelineLayout()
 	}
 }
 
-void VulkanApplication::CreateGeometryPipelineLayout()
+void VulkanApplication::CreateVisBuffWritePipelineLayout()
 {
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &geometryDescriptorSetLayout;
+	pipelineLayoutInfo.pSetLayouts = &writePassDescriptorSetLayout; 
 	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 	pipelineLayoutInfo.pNext = nullptr;
 	pipelineLayoutInfo.flags = 0;
 
 	// Geometry layout
-	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &geometryPipelineLayout) != VK_SUCCESS)
+	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &visBuffWritePipelineLayout) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create geometry pipeline layout");
 	}
 }
 
-void VulkanApplication::CreateGeometryRenderPass()
+void VulkanApplication::CreateVisBuffWriteRenderPass()
 {
 	// Create gBuffer attachments
-	CreateFrameBufferAttachment(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &gBuffer.position);
-	CreateFrameBufferAttachment(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &gBuffer.normal);
-	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &gBuffer.colour);
+	CreateFrameBufferAttachment(VK_FORMAT_R32G32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visAndBarys);
+	CreateFrameBufferAttachment(VK_FORMAT_R32G32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.uvDerivs);
 	CreateDepthResources();
 
-	// Create attachment descriptions for the gbuffer
-	std::array<VkAttachmentDescription, 4> attachmentDescs = {};
+	// Create attachment descriptions for the visibility buffer
+	std::array<VkAttachmentDescription, 3> attachmentDescs = {};
 
 	// Fill attachment properties
-	for (uint32_t i = 0; i < 4; ++i)
+	for (uint32_t i = 0; i < 3; ++i)
 	{
 		attachmentDescs[i].samples = VK_SAMPLE_COUNT_1_BIT;
 		attachmentDescs[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		attachmentDescs[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		attachmentDescs[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		attachmentDescs[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		if (i == 3) // Depth attachment
+		if (i == 2) // Depth attachment
 		{
 			attachmentDescs[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			attachmentDescs[i].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -547,21 +542,19 @@ void VulkanApplication::CreateGeometryRenderPass()
 		else
 		{
 			attachmentDescs[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			attachmentDescs[i].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			attachmentDescs[i].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // TODO: The visibility buffer is set to the PRESENT layout in other implementations. I think thats a mistake but want to put it in here in case it doesn't work
 		}
 	}
 	// Fill Formats
-	attachmentDescs[0].format = gBuffer.position.format;
-	attachmentDescs[1].format = gBuffer.normal.format;
-	attachmentDescs[2].format = gBuffer.colour.format;
-	attachmentDescs[3].format = gBuffer.depth.format;
+	attachmentDescs[0].format = visibilityBuffer.visAndBarys.format;
+	attachmentDescs[1].format = visibilityBuffer.uvDerivs.format;
+	attachmentDescs[2].format = visibilityBuffer.depth.format;
 
 	// Create attachment references for the subpass to use
 	std::vector<VkAttachmentReference> colorReferences;
 	colorReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
 	colorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-	colorReferences.push_back({ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-	VkAttachmentReference depthReference = {3, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+	VkAttachmentReference depthReference = {2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
 
 	// Create subpass (one for now)
 	VkSubpassDescription subpass = {};
@@ -598,7 +591,7 @@ void VulkanApplication::CreateGeometryRenderPass()
 	renderPassInfo.pDependencies = dependencies.data();
 
 	// Create geometry pass
-	if (vkCreateRenderPass(vulkan->Device(), &renderPassInfo, nullptr, &gBuffer.renderPass) != VK_SUCCESS)
+	if (vkCreateRenderPass(vulkan->Device(), &renderPassInfo, nullptr, &visBuffWriteRenderPass) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create render pass");
 	}
@@ -700,29 +693,28 @@ VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& co
 #pragma region Drawing Functions
 void VulkanApplication::CreateFrameBuffers()
 {
-	// Create gBuffer
-	std::array<VkImageView, 4> attachments = {};
-	attachments[0] = gBuffer.position.imageView;
-	attachments[1] = gBuffer.normal.imageView;
-	attachments[2] = gBuffer.colour.imageView;
-	attachments[3] = gBuffer.depth.imageView;
+	// Create Visibility Buffer frame buffer
+	std::array<VkImageView, 3> attachments = {};
+	attachments[0] = visibilityBuffer.visAndBarys.imageView;
+	attachments[1] = visibilityBuffer.uvDerivs.imageView;
+	attachments[2] = visibilityBuffer.depth.imageView;
 
 	VkFramebufferCreateInfo framebufferInfo = {};
 	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	framebufferInfo.pNext = NULL;
-	framebufferInfo.renderPass = gBuffer.renderPass; // Tell frame buffer which render pass it should be compatible with
+	framebufferInfo.renderPass = visBuffWriteRenderPass; // Tell frame buffer which render pass it should be compatible with
 	framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 	framebufferInfo.pAttachments = attachments.data();
 	framebufferInfo.width = vulkan->SwapChainExtent().width;
 	framebufferInfo.height = vulkan->SwapChainExtent().height;
 	framebufferInfo.layers = 1;
 
-	if (vkCreateFramebuffer(vulkan->Device(), &framebufferInfo, nullptr, &gBuffer.frameBuffer) != VK_SUCCESS) 
+	if (vkCreateFramebuffer(vulkan->Device(), &framebufferInfo, nullptr, &visibilityBuffer.frameBuffer) != VK_SUCCESS) 
 	{
 		throw std::runtime_error("Failed to create frame buffer");
 	}
 
-	// Create deferred frame buffer for each swapchain image
+	// Create visibility buffer shade frame buffer for each swapchain image
 	swapChainFramebuffers.resize(vulkan->SwapChainImageViews().size());
 	for (size_t i = 0; i < vulkan->SwapChainImageViews().size(); i++)
 	{
@@ -791,43 +783,43 @@ void VulkanApplication::DrawFrame()
 	// We reset fences here in the case that the swap chain needs rebuilding
 	vkResetFences(vulkan->Device(), 1, &vulkan->Fences()[currentFrame]);
 
-	// Update the uniform buffer
-	UpdateDeferredUniformBuffer(imageIndex);
-	UpdateGeometryUniformBuffer();
+	// Update the uniform buffers
+	UpdateQuadUniformBuffer(imageIndex); // TODO: Don't need to update this every frame, its static. It's probably pointless even having it as a uniform buffer
+	UpdateMVPUniformBuffer();
 
-	/// GEOMETRY PASS =======================================================================================
+	/// VIS WRITE PASS =======================================================================================
 	// Submit the command buffer. Waits for the provided semaphores to be signaled before beginning execution
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }; // Waiting until we can start writing color, in theory this means the implementation can execute the vertex buffer while image isn't available
 	submitInfo.pWaitDstStageMask = waitStages;
 
-	// Wait for image to be available, and signal when g-buffer is filled
+	// Wait for image to be available, and signal when visibility buffer is filled
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitSemaphores = &imageAvailableSemaphore;
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &geometryPassSemaphore;
+	submitInfo.pSignalSemaphores = &visBuffWriteSemaphore;
 
 	// Submit to queue
-	submitInfo.pCommandBuffers = &geometryCommandBuffer;
+	submitInfo.pCommandBuffers = &visBuffWriteCommandBuffer;
 	submitInfo.commandBufferCount = 1;
 	if (vkQueueSubmit(vulkan->Queues().graphics, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to submit draw command buffer");
+		throw std::runtime_error("Failed to submit visBuffWrite command buffer");
 	}
 	/// =====================================================================================================
 
-	/// DEFERRED PASS =======================================================================================
+	/// VIS SHADE PASS =======================================================================================
 	// Wait for g-buffer being filled, signal when rendering is complete
 	VkSemaphore renderFinishedSemaphore = vulkan->RenderFinishedSemaphores()[currentFrame];
-	submitInfo.pWaitSemaphores = &geometryPassSemaphore;
+	submitInfo.pWaitSemaphores = &visBuffWriteSemaphore;
 	submitInfo.pSignalSemaphores = &renderFinishedSemaphore;
 
 	// Submit to queue
 	submitInfo.pCommandBuffers = &deferredCommandBuffers[imageIndex];
 	if (vkQueueSubmit(vulkan->Queues().graphics, 1, &submitInfo, vulkan->Fences()[currentFrame]) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to submit draw command buffer");
+		throw std::runtime_error("Failed to submit visBuffShade command buffer");
 	}
 	/// =====================================================================================================
 
@@ -937,7 +929,7 @@ void VulkanApplication::AllocateDeferredCommandBuffers()
 		vkCmdSetScissor(deferredCommandBuffers[i], 0, 1, &scissor);
 
 		// Bind the correct descriptor set for this swapchain image
-		vkCmdBindDescriptorSets(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipelineLayout, 0, 1, &deferredDescriptorSets[i], 0, nullptr);
+		vkCmdBindDescriptorSets(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipelineLayout, 0, 1, &shadePassDescriptorSets[i], 0, nullptr);
 
 		// Now bind the graphics pipeline
 		vkCmdBindPipeline(deferredCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipeline);
@@ -962,7 +954,7 @@ void VulkanApplication::AllocateDeferredCommandBuffers()
 	}
 }
 
-void VulkanApplication::AllocateGeometryCommandBuffer()
+void VulkanApplication::AllocateVisBuffWriteCommandBuffer()
 {
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -970,76 +962,75 @@ void VulkanApplication::AllocateGeometryCommandBuffer()
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = 1;
 
-	if (vkAllocateCommandBuffers(vulkan->Device(), &allocInfo, &geometryCommandBuffer) != VK_SUCCESS)
+	if (vkAllocateCommandBuffers(vulkan->Device(), &allocInfo, &visBuffWriteCommandBuffer) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to allocate geometry command buffer");
+		throw std::runtime_error("Failed to allocate vis buff write command buffer");
 	}
 
-	// Create the semaphore to synchronise the geometry pass
+	// Create the semaphore to synchronise the visibility buffer write pass
 	VkSemaphoreCreateInfo semaphoreInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-	if (vkCreateSemaphore(vulkan->Device(), &semaphoreInfo, nullptr, &geometryPassSemaphore) != VK_SUCCESS)
+	if (vkCreateSemaphore(vulkan->Device(), &semaphoreInfo, nullptr, &visBuffWriteSemaphore) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create geometry pass semaphore");
+		throw std::runtime_error("Failed to create vis buff write pass semaphore");
 	}
 
 	// Set up clear values for each attachment
-	std::array<VkClearValue, 4> clearValues = {};
+	std::array<VkClearValue, 3> clearValues = {};
 	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	clearValues[3].depthStencil = { 1.0f, 0 };
+	clearValues[2].depthStencil = { 1.0f, 0 };
 
 	// Begin recording the command buffer
 	VkCommandBufferBeginInfo cmdBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-	if (vkBeginCommandBuffer(geometryCommandBuffer, &cmdBeginInfo) != VK_SUCCESS)
+	if (vkBeginCommandBuffer(visBuffWriteCommandBuffer, &cmdBeginInfo) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to begin recording geometry command buffer");
+		throw std::runtime_error("Failed to begin recording vis buff write command buffer");
 	}
 
 	// Render Pass info
 	VkRenderPassBeginInfo renderPassInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
-	renderPassInfo.renderPass = gBuffer.renderPass;
-	renderPassInfo.framebuffer = gBuffer.frameBuffer;
+	renderPassInfo.renderPass = visBuffWriteRenderPass;
+	renderPassInfo.framebuffer = visibilityBuffer.frameBuffer;
 	renderPassInfo.renderArea.extent = vulkan->SwapChainExtent();
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
 
 	// Begin the render pass
-	vkCmdBeginRenderPass(geometryCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBeginRenderPass(visBuffWriteCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 	VkViewport viewport = {};
 	viewport.width = (float)vulkan->SwapChainExtent().width;
 	viewport.height = (float)vulkan->SwapChainExtent().height;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
-	vkCmdSetViewport(geometryCommandBuffer, 0, 1, &viewport);
+	vkCmdSetViewport(visBuffWriteCommandBuffer, 0, 1, &viewport);
 
 	VkRect2D scissor = {};
 	scissor.extent = vulkan->SwapChainExtent();
 	scissor.offset = { 0, 0 };
-	vkCmdSetScissor(geometryCommandBuffer, 0, 1, &scissor);
+	vkCmdSetScissor(visBuffWriteCommandBuffer, 0, 1, &scissor);
+
+	// Bind descriptor set
+	vkCmdBindDescriptorSets(visBuffWriteCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, deferredPipelineLayout, 0, 1, &writePassDescriptorSet, 0, nullptr);
 
 	// Bind the pipeline
-	vkCmdBindPipeline(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipeline);
-
-	// Bind descriptor sets
-	vkCmdBindDescriptorSets(geometryCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipelineLayout, 0, 1, &geometryDescriptorSet, 0, nullptr);
+	vkCmdBindPipeline(visBuffWriteCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffWritePipeline);
 
 	// Bind geometry buffers
 	VkDeviceSize offsets[1] = { 0 };
 	VkBuffer vertexBuffers[] = { vertexBuffer };
-	vkCmdBindVertexBuffers(geometryCommandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindIndexBuffer(geometryCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindVertexBuffers(visBuffWriteCommandBuffer, 0, 1, vertexBuffers, offsets);
+	vkCmdBindIndexBuffer(visBuffWriteCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 	// Draw using index buffer
-	vkCmdDrawIndexed(geometryCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+	vkCmdDrawIndexed(visBuffWriteCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
-	vkCmdEndRenderPass(geometryCommandBuffer);
+	vkCmdEndRenderPass(visBuffWriteCommandBuffer);
 
 	// End recording of command buffer
-	if (vkEndCommandBuffer(geometryCommandBuffer) != VK_SUCCESS)
+	if (vkEndCommandBuffer(visBuffWriteCommandBuffer) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to record geometry command buffer");
+		throw std::runtime_error("Failed to record vis buff write command buffer");
 	}
 }
 
@@ -1147,14 +1138,14 @@ void VulkanApplication::CreateDepthResources()
 {
 	// Select format
 	VkFormat depthFormat = FindDepthFormat();
-	gBuffer.depth.format = depthFormat;
+	visibilityBuffer.depth.format = depthFormat;
 
 	// Create Image and ImageView objects
-	CreateImage(vulkan->SwapChainExtent().width, vulkan->SwapChainExtent().height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, gBuffer.depth.image, gBuffer.depth.imageMemory);
-	gBuffer.depth.imageView = VulkanCore::CreateImageView(vulkan->Device(), gBuffer.depth.image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+	CreateImage(vulkan->SwapChainExtent().width, vulkan->SwapChainExtent().height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, visibilityBuffer.depth.image, visibilityBuffer.depth.imageMemory);
+	visibilityBuffer.depth.imageView = VulkanCore::CreateImageView(vulkan->Device(), visibilityBuffer.depth.image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 	// Transition depth image for shader usage
-	TransitionImageLayout(gBuffer.depth.image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	TransitionImageLayout(visibilityBuffer.depth.image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
 	// Now set up the depth attachments for the deferred pass (TODO: may be completely unnecessary)
 	// Create Image and ImageView objects
@@ -1277,18 +1268,18 @@ void VulkanApplication::CreateUniformBuffers()
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
 	// Create deferred uniform buffers for each swap chain image
-	uniformBuffers.resize(vulkan->SwapChainImages().size());
-	uniformBufferAllocations.resize(vulkan->SwapChainImages().size());
+	quadUniformBuffers.resize(vulkan->SwapChainImages().size());
+	quadUniformBufferAllocations.resize(vulkan->SwapChainImages().size());
 	for (size_t i = 0; i < vulkan->SwapChainImages().size(); i++)
 	{
-		CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBufferAllocations[i]);
+		CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, quadUniformBuffers[i], quadUniformBufferAllocations[i]);
 	}
 
 	// Create uniform buffer for Geometry Pass
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, geometryUniformBuffer, geometryUniformBufferAllocation);
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, mvpUniformBuffer, mvpUniformBufferAllocation);
 }
 
-void VulkanApplication::UpdateDeferredUniformBuffer(uint32_t currentImage)
+void VulkanApplication::UpdateQuadUniformBuffer(uint32_t currentImage)
 {
 	// Generate matrices
 	UniformBufferObject ubo = {};
@@ -1298,12 +1289,12 @@ void VulkanApplication::UpdateDeferredUniformBuffer(uint32_t currentImage)
 
 	// Now map the memory to uniform buffer
 	void* mappedData;
-	vmaMapMemory(allocator, uniformBufferAllocations[currentImage], &mappedData);
+	vmaMapMemory(allocator, quadUniformBufferAllocations[currentImage], &mappedData);
 	memcpy(mappedData, &ubo, sizeof(ubo));
-	vmaUnmapMemory(allocator, uniformBufferAllocations[currentImage]);
+	vmaUnmapMemory(allocator, quadUniformBufferAllocations[currentImage]);
 }
 
-void VulkanApplication::UpdateGeometryUniformBuffer()
+void VulkanApplication::UpdateMVPUniformBuffer()
 {
 	// Get time since rendering started
 	static auto startTime = std::chrono::high_resolution_clock::now();
@@ -1320,9 +1311,9 @@ void VulkanApplication::UpdateGeometryUniformBuffer()
 
 	// Now map the memory to uniform buffer
 	void* mappedData;
-	vmaMapMemory(allocator, geometryUniformBufferAllocation, &mappedData);
+	vmaMapMemory(allocator, mvpUniformBufferAllocation, &mappedData);
 	memcpy(mappedData, &ubo, sizeof(ubo));
-	vmaUnmapMemory(allocator, geometryUniformBufferAllocation);
+	vmaUnmapMemory(allocator, mvpUniformBufferAllocation);
 }
 
 void VulkanApplication::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
@@ -1393,28 +1384,6 @@ void VulkanApplication::CreateTextureImageView()
 	textureImageView = VulkanCore::CreateImageView(vulkan->Device(), textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-void VulkanApplication::CreateGBufferSampler()
-{
-	VkSamplerCreateInfo samplerInfo = {};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_NEAREST;
-	samplerInfo.minFilter = VK_FILTER_NEAREST;
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.maxAnisotropy = 1.0f;
-	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 1.0f;
-	samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-
-	if (vkCreateSampler(vulkan->Device(), &samplerInfo, nullptr, &gBufferSampler) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create texture sampler");
-	}
-}
-
 void VulkanApplication::CreateTextureSampler()
 {
 	VkSamplerCreateInfo samplerInfo = {};
@@ -1438,6 +1407,32 @@ void VulkanApplication::CreateTextureSampler()
 	if (vkCreateSampler(vulkan->Device(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create texture sampler");
+	}
+}
+
+void VulkanApplication::CreateDepthSampler()
+{
+	VkSamplerCreateInfo samplerInfo = {};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_LINEAR; // Apply linear interpolation to over/under-sampled texels
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.anisotropyEnable = VK_TRUE; // Enable anisotropic filtering 
+	samplerInfo.maxAnisotropy = 16;
+	samplerInfo.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE; // Clamp texel coordinates to [0, 1]
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.compareOp = VK_COMPARE_OP_NEVER;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = 11.0f;
+
+	if (vkCreateSampler(vulkan->Device(), &samplerInfo, nullptr, &depthSampler) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create depth sampler");
 	}
 }
 
@@ -1623,93 +1618,21 @@ void VulkanApplication::LoadModel()
 #pragma endregion
 
 #pragma region Descriptor Functions
-void VulkanApplication::CreateDeferredDescriptorSetLayout()
-{
-	// Descriptor layout for the deferred pass
-	// Binding 0: Vertex Shader Uniform Buffer
-	VkDescriptorSetLayoutBinding uboLayoutBinding = {};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // Specify that this descriptor will be used in the vertex shader
-
-	// Binding 1: Position render target sampler
-	VkDescriptorSetLayoutBinding positionSamplerBinding = {};
-	positionSamplerBinding.binding = 1;
-	positionSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	positionSamplerBinding.descriptorCount = 1;
-	positionSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
-
-	// Binding 2: Normals render target sampler
-	VkDescriptorSetLayoutBinding normalsSamplerBinding = {};
-	normalsSamplerBinding.binding = 2;
-	normalsSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	normalsSamplerBinding.descriptorCount = 1;
-	normalsSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
-
-	// Binding 3: Colour render target sampler
-	VkDescriptorSetLayoutBinding colourSamplerBinding = {};
-	colourSamplerBinding.binding = 3;
-	colourSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	colourSamplerBinding.descriptorCount = 1;
-	colourSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
-
-	// Create descriptor set layout
-	std::array<VkDescriptorSetLayoutBinding, 4> bindings = { uboLayoutBinding, positionSamplerBinding, normalsSamplerBinding, colourSamplerBinding };
-	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
-
-	if (vkCreateDescriptorSetLayout(vulkan->Device(), &layoutInfo, nullptr, &deferredDescriptorSetLayout) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create deferred descriptor set layout");
-	}
-}
-
-void VulkanApplication::CreateGeometryDescriptorSetLayout()
-{
-	// Descriptor layout for the geometry pass
-	// Binding 0: Vertex Shader Uniform Buffer of loaded model
-	VkDescriptorSetLayoutBinding uboLayoutBinding = {};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // Specify that this descriptor will be used in the vertex shader
-
-	// Binding 1: Model texture sampler
-	VkDescriptorSetLayoutBinding textureSamplerBinding = {};
-	textureSamplerBinding.binding = 1;
-	textureSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	textureSamplerBinding.descriptorCount = 1;
-	textureSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
-
-	// Create descriptor set layout
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, textureSamplerBinding };
-	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
-
-	if (vkCreateDescriptorSetLayout(vulkan->Device(), &layoutInfo, nullptr, &geometryDescriptorSetLayout) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create geometry descriptor set layout");
-	}
-}
-
 void VulkanApplication::CreateDescriptorPool()
 {
-	std::array<VkDescriptorPoolSize, 2> poolSizes = {};
+	std::array<VkDescriptorPoolSize, 3> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(vulkan->SwapChainImages().size()) + 1;
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(vulkan->SwapChainImages().size()) + 1; // Extra mvp ubo for the write pass
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = (3 * static_cast<uint32_t>(vulkan->SwapChainImages().size())) + 1;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(vulkan->SwapChainImages().size());
+	poolSizes[2].type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	poolSizes[2].descriptorCount = (static_cast<uint32_t>(vulkan->SwapChainImages().size())) * 3; // 3 input attachments per swapchain image
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<uint32_t>(vulkan->SwapChainImages().size()) + 1;
+	poolInfo.maxSets = static_cast<uint32_t>(vulkan->SwapChainImages().size()) + 1; // 1 descriptor set per swapchain image and one for the write pass
 
 	if (vkCreateDescriptorPool(vulkan->Device(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
 	{
@@ -1717,135 +1640,243 @@ void VulkanApplication::CreateDescriptorPool()
 	}
 }
 
-// Create two descriptor sets, one containing the gBuffer images for the deferred pass (for each swapchain image), and one with the MVP uniform buffer and texture for the loaded model
-void VulkanApplication::CreateDescriptorSets()
+void VulkanApplication::CreateShadePassDescriptorSetLayout()
 {
-	// Create deferred descriptor sets
-	std::vector<VkDescriptorSetLayout> deferredLayouts(vulkan->SwapChainImages().size(), deferredDescriptorSetLayout);
+	// Descriptor layout for the shading pass
+	// Binding 0: Vertex Shader Uniform Buffer of loaded model
+	VkDescriptorSetLayoutBinding modelUboLayoutBinding = {};
+	modelUboLayoutBinding.binding = 0;
+	modelUboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	modelUboLayoutBinding.descriptorCount = 1;
+	modelUboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // Specify that this descriptor will be used in the vertex shader
 
-	// Create deferred pass descriptor set for textured quad
-	VkDescriptorSetAllocateInfo deferredAllocInfo = {};
-	deferredAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	deferredAllocInfo.descriptorPool = descriptorPool;
-	deferredAllocInfo.descriptorSetCount = static_cast<uint32_t>(vulkan->SwapChainImages().size());
-	deferredAllocInfo.pSetLayouts = deferredLayouts.data();
+	// Binding 1: Fullscreen Quad Uniform Buffer
+	VkDescriptorSetLayoutBinding quadUboLayoutBinding = {};
+	quadUboLayoutBinding.binding = 1;
+	quadUboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	quadUboLayoutBinding.descriptorCount = 1;
+	quadUboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // Specify that this descriptor will be used in the vertex shader
 
-	deferredDescriptorSets.resize(vulkan->SwapChainImages().size());
-	if (vkAllocateDescriptorSets(vulkan->Device(), &deferredAllocInfo, deferredDescriptorSets.data()) != VK_SUCCESS)
+	// Binding 2: Model texture sampler
+	VkDescriptorSetLayoutBinding textureSamplerBinding = {};
+	textureSamplerBinding.binding = 2;
+	textureSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	textureSamplerBinding.descriptorCount = 1;
+	textureSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
+
+	// Binding 3: Visibility and Barycentric Coords Buffer
+	VkDescriptorSetLayoutBinding visBufferBinding = {};
+	visBufferBinding.binding = 3;
+	visBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	visBufferBinding.descriptorCount = 1;
+	visBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
+
+	// Binding 4: UV Derivatives Buffer
+	VkDescriptorSetLayoutBinding uvDerivBufferBinding = {};
+	uvDerivBufferBinding.binding = 4;
+	uvDerivBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	uvDerivBufferBinding.descriptorCount = 1;
+	uvDerivBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
+
+	// Binding 5: Depth Buffer
+	VkDescriptorSetLayoutBinding depthBufferBinding = {};
+	depthBufferBinding.binding = 5;
+	depthBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	depthBufferBinding.descriptorCount = 1;
+	depthBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
+
+	// Create descriptor set layout
+	std::array<VkDescriptorSetLayoutBinding, 6> bindings = { modelUboLayoutBinding, quadUboLayoutBinding, textureSamplerBinding, visBufferBinding, uvDerivBufferBinding, depthBufferBinding };
+	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
+
+	if (vkCreateDescriptorSetLayout(vulkan->Device(), &layoutInfo, nullptr, &shadePassDescriptorSetLayout) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to allocate deferred descriptor sets");
+		throw std::runtime_error("Failed to create shade pass descriptor set layout");
+	}
+}
+
+void VulkanApplication::CreateWritePassDescriptorSetLayout()
+{
+	// Descriptor layout for the write pass
+	// Binding 0: Vertex Shader Uniform Buffer of loaded model
+	VkDescriptorSetLayoutBinding modelUboLayoutBinding = {};
+	modelUboLayoutBinding.binding = 0;
+	modelUboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	modelUboLayoutBinding.descriptorCount = 1;
+	modelUboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // Specify that this descriptor will be used in the vertex shader
+
+	// Create descriptor set layout
+	std::array<VkDescriptorSetLayoutBinding, 1> bindings = { modelUboLayoutBinding };
+	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
+
+	if (vkCreateDescriptorSetLayout(vulkan->Device(), &layoutInfo, nullptr, &writePassDescriptorSetLayout) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create write pass descriptor set layout");
+	}
+}
+
+// Create the descriptor sets for the shade pass, containing the visibility buffer images (for each swapchain image)
+void VulkanApplication::CreateShadePassDescriptorSets()
+{
+	// Create shade descriptor sets
+	std::vector<VkDescriptorSetLayout> shadingLayouts(vulkan->SwapChainImages().size(), shadePassDescriptorSetLayout);
+
+	// Create shade pass descriptor set
+	VkDescriptorSetAllocateInfo shadePassAllocInfo = {};
+	shadePassAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	shadePassAllocInfo.descriptorPool = descriptorPool;
+	shadePassAllocInfo.descriptorSetCount = static_cast<uint32_t>(vulkan->SwapChainImages().size());
+	shadePassAllocInfo.pSetLayouts = shadingLayouts.data();
+
+	shadePassDescriptorSets.resize(vulkan->SwapChainImages().size());
+	if (vkAllocateDescriptorSets(vulkan->Device(), &shadePassAllocInfo, shadePassDescriptorSets.data()) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to allocate shade pass descriptor sets");
 	}
 
 	// Configure the descriptors
 	for (size_t i = 0; i < vulkan->SwapChainImages().size(); i++)
 	{
-		VkDescriptorBufferInfo deferredBufferInfo = {};
-		deferredBufferInfo.buffer = uniformBuffers[i];
-		deferredBufferInfo.offset = 0;
-		deferredBufferInfo.range = sizeof(UniformBufferObject);
+		// Model UBO
+		VkDescriptorBufferInfo mvpUBOInfo = {};
+		mvpUBOInfo.buffer = mvpUniformBuffer;
+		mvpUBOInfo.offset = 0;
+		mvpUBOInfo.range = sizeof(UniformBufferObject);
 
-		VkDescriptorImageInfo texDescriptorPosition = {};
-		texDescriptorPosition.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		texDescriptorPosition.imageView = gBuffer.position.imageView;
-		texDescriptorPosition.sampler = gBufferSampler;
+		// Quad UBO
+		VkDescriptorBufferInfo quadUBOInfo = {};
+		quadUBOInfo.buffer = quadUniformBuffers[i];
+		quadUBOInfo.offset = 0;
+		quadUBOInfo.range = sizeof(UniformBufferObject);
 
-		VkDescriptorImageInfo texDescriptorNormal = {};
-		texDescriptorNormal.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		texDescriptorNormal.imageView = gBuffer.normal.imageView;
-		texDescriptorNormal.sampler = gBufferSampler;
+		// Model diffuse texture
+		VkDescriptorImageInfo modelTextureInfo = {};
+		modelTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		modelTextureInfo.imageView = textureImageView;
+		modelTextureInfo.sampler = textureSampler;
 
-		VkDescriptorImageInfo texDescriptorColour = {};
-		texDescriptorColour.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		texDescriptorColour.imageView = gBuffer.colour.imageView;
-		texDescriptorColour.sampler = gBufferSampler;
+		// Visibility and Barycentric Coords Buffer
+		VkDescriptorImageInfo visBufferInfo = {};
+		visBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		visBufferInfo.imageView = visibilityBuffer.visAndBarys.imageView;
+		visBufferInfo.sampler = VK_NULL_HANDLE;
+
+		// UV Derivatives Buffer
+		VkDescriptorImageInfo uvDerivBufferInfo = {};
+		uvDerivBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		uvDerivBufferInfo.imageView = visibilityBuffer.uvDerivs.imageView;
+		uvDerivBufferInfo.sampler = VK_NULL_HANDLE;
+
+		// Depth Buffer
+		VkDescriptorImageInfo depthBufferInfo = {};
+		depthBufferInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		depthBufferInfo.imageView = visibilityBuffer.depth.imageView;
+		depthBufferInfo.sampler = depthSampler;
 
 		// Create a descriptor write for each descriptor in the set
-		std::array<VkWriteDescriptorSet, 4> deferredDescriptorWrites = {};
+		std::array<VkWriteDescriptorSet, 6> shadePassDescriptorWrites = {};
 
-		// Binding 0: Vertex Shader Uniform Buffer
-		deferredDescriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		deferredDescriptorWrites[0].dstSet = deferredDescriptorSets[i];
-		deferredDescriptorWrites[0].dstBinding = 0;
-		deferredDescriptorWrites[0].dstArrayElement = 0;
-		deferredDescriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		deferredDescriptorWrites[0].descriptorCount = 1;
-		deferredDescriptorWrites[0].pBufferInfo = &deferredBufferInfo;
+		// Binding 0: Vertex Shader Uniform Buffer of loaded model
+		shadePassDescriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		shadePassDescriptorWrites[0].dstSet = shadePassDescriptorSets[i];
+		shadePassDescriptorWrites[0].dstBinding = 0;
+		shadePassDescriptorWrites[0].dstArrayElement = 0;
+		shadePassDescriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		shadePassDescriptorWrites[0].descriptorCount = 1;
+		shadePassDescriptorWrites[0].pBufferInfo = &mvpUBOInfo;
 
-		// Binding 1: Position render texture
-		deferredDescriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		deferredDescriptorWrites[1].dstSet = deferredDescriptorSets[i];
-		deferredDescriptorWrites[1].dstBinding = 1;
-		deferredDescriptorWrites[1].dstArrayElement = 0;
-		deferredDescriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		deferredDescriptorWrites[1].descriptorCount = 1;
-		deferredDescriptorWrites[1].pImageInfo = &texDescriptorPosition;
+		// Binding 1: Fullscreen Quad Uniform Buffer
+		shadePassDescriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		shadePassDescriptorWrites[1].dstSet = shadePassDescriptorSets[i];
+		shadePassDescriptorWrites[1].dstBinding = 1;
+		shadePassDescriptorWrites[1].dstArrayElement = 0;
+		shadePassDescriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		shadePassDescriptorWrites[1].descriptorCount = 1;
+		shadePassDescriptorWrites[1].pBufferInfo = &quadUBOInfo;
 
-		// Binding 2: Normals render texture
-		deferredDescriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		deferredDescriptorWrites[2].dstSet = deferredDescriptorSets[i];
-		deferredDescriptorWrites[2].dstBinding = 2;
-		deferredDescriptorWrites[2].dstArrayElement = 0;
-		deferredDescriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		deferredDescriptorWrites[2].descriptorCount = 1;
-		deferredDescriptorWrites[2].pImageInfo = &texDescriptorNormal;
+		// Binding 2: Model texture sampler
+		shadePassDescriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		shadePassDescriptorWrites[2].dstSet = shadePassDescriptorSets[i];
+		shadePassDescriptorWrites[2].dstBinding = 2;
+		shadePassDescriptorWrites[2].dstArrayElement = 0;
+		shadePassDescriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		shadePassDescriptorWrites[2].descriptorCount = 1;
+		shadePassDescriptorWrites[2].pImageInfo = &modelTextureInfo;
 
-		// Binding 3: Colour render texture
-		deferredDescriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		deferredDescriptorWrites[3].dstSet = deferredDescriptorSets[i];
-		deferredDescriptorWrites[3].dstBinding = 3;
-		deferredDescriptorWrites[3].dstArrayElement = 0;
-		deferredDescriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		deferredDescriptorWrites[3].descriptorCount = 1;
-		deferredDescriptorWrites[3].pImageInfo = &texDescriptorColour;
+		// Binding 3: Visibility and Barycentric Coords Buffer
+		shadePassDescriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		shadePassDescriptorWrites[3].dstSet = shadePassDescriptorSets[i];
+		shadePassDescriptorWrites[3].dstBinding = 3;
+		shadePassDescriptorWrites[3].dstArrayElement = 0;
+		shadePassDescriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		shadePassDescriptorWrites[3].descriptorCount = 1;
+		shadePassDescriptorWrites[3].pImageInfo = &visBufferInfo;
 
-		vkUpdateDescriptorSets(vulkan->Device(), static_cast<uint32_t>(deferredDescriptorWrites.size()), deferredDescriptorWrites.data(), 0, nullptr);
+		// Binding 4: UV Derivatives Buffer
+		shadePassDescriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		shadePassDescriptorWrites[4].dstSet = shadePassDescriptorSets[i];
+		shadePassDescriptorWrites[4].dstBinding = 4;
+		shadePassDescriptorWrites[4].dstArrayElement = 0;
+		shadePassDescriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		shadePassDescriptorWrites[4].descriptorCount = 1;
+		shadePassDescriptorWrites[4].pImageInfo = &uvDerivBufferInfo;
+
+		// Binding 5: Depth Buffer
+		shadePassDescriptorWrites[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		shadePassDescriptorWrites[5].dstSet = shadePassDescriptorSets[i];
+		shadePassDescriptorWrites[5].dstBinding = 5;
+		shadePassDescriptorWrites[5].dstArrayElement = 0;
+		shadePassDescriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		shadePassDescriptorWrites[5].descriptorCount = 1;
+		shadePassDescriptorWrites[5].pImageInfo = &depthBufferInfo;
+
+		vkUpdateDescriptorSets(vulkan->Device(), static_cast<uint32_t>(shadePassDescriptorWrites.size()), shadePassDescriptorWrites.data(), 0, nullptr);
 	}
+}
 
-	// Create Geometry Pass Descriptor Sets
-	std::vector<VkDescriptorSetLayout> geometryLayouts = { geometryDescriptorSetLayout };
-	VkDescriptorSetAllocateInfo geometryAllocInfo = {};
-	geometryAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	geometryAllocInfo.descriptorPool = descriptorPool;
-	geometryAllocInfo.descriptorSetCount = static_cast<uint32_t>(geometryLayouts.size());
-	geometryAllocInfo.pSetLayouts = geometryLayouts.data();
+// Create the descriptor sets for the write pass, containing the MVP uniform buffer only
+void VulkanApplication::CreateWritePassDescriptorSet()
+{
+	// Create write pass descriptor sets
+	std::vector<VkDescriptorSetLayout> writeLayouts = { writePassDescriptorSetLayout };
 
-	if (vkAllocateDescriptorSets(vulkan->Device(), &geometryAllocInfo, &geometryDescriptorSet) != VK_SUCCESS)
+	// Create write pass descriptor set for MVP UBO
+	VkDescriptorSetAllocateInfo writePassAllocInfo = {};
+	writePassAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	writePassAllocInfo.descriptorPool = descriptorPool;
+	writePassAllocInfo.descriptorSetCount = 1;
+	writePassAllocInfo.pSetLayouts = writeLayouts.data();
+
+	if (vkAllocateDescriptorSets(vulkan->Device(), &writePassAllocInfo, &writePassDescriptorSet) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to allocate geometry descriptor sets");
+		throw std::runtime_error("Failed to allocate write pass descriptor sets");
 	}
 
-	VkDescriptorBufferInfo geometryBufferInfo = {};
-	geometryBufferInfo.buffer = geometryUniformBuffer;
-	geometryBufferInfo.offset = 0;
-	geometryBufferInfo.range = sizeof(UniformBufferObject);
-
-	VkDescriptorImageInfo modelTextureInfo = {};
-	modelTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	modelTextureInfo.imageView = textureImageView;
-	modelTextureInfo.sampler = textureSampler;
+	// Model UBO
+	VkDescriptorBufferInfo mvpUBOInfo = {};
+	mvpUBOInfo.buffer = mvpUniformBuffer;
+	mvpUBOInfo.offset = 0;
+	mvpUBOInfo.range = sizeof(UniformBufferObject);
 
 	// Create a descriptor write for each descriptor in the set
-	std::array<VkWriteDescriptorSet, 2> geometryDescriptorWrites = {};
+	std::array<VkWriteDescriptorSet, 1> writePassDescriptorWrites = {};
 
-	// Binding 0: Vertex Shader Uniform Buffer
-	geometryDescriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	geometryDescriptorWrites[0].dstSet = geometryDescriptorSet;
-	geometryDescriptorWrites[0].dstBinding = 0;
-	geometryDescriptorWrites[0].dstArrayElement = 0;
-	geometryDescriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	geometryDescriptorWrites[0].descriptorCount = 1;
-	geometryDescriptorWrites[0].pBufferInfo = &geometryBufferInfo;
+	// Binding 0: Vertex Shader Uniform Buffer of loaded model
+	writePassDescriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writePassDescriptorWrites[0].dstSet = writePassDescriptorSet;
+	writePassDescriptorWrites[0].dstBinding = 0;
+	writePassDescriptorWrites[0].dstArrayElement = 0;
+	writePassDescriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	writePassDescriptorWrites[0].descriptorCount = 1;
+	writePassDescriptorWrites[0].pBufferInfo = &mvpUBOInfo;
 
-	// Binding 1: Model texture
-	geometryDescriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	geometryDescriptorWrites[1].dstSet = geometryDescriptorSet;
-	geometryDescriptorWrites[1].dstBinding = 1;
-	geometryDescriptorWrites[1].dstArrayElement = 0;
-	geometryDescriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	geometryDescriptorWrites[1].descriptorCount = 1;
-	geometryDescriptorWrites[1].pImageInfo = &modelTextureInfo;
-
-	vkUpdateDescriptorSets(vulkan->Device(), static_cast<uint32_t>(geometryDescriptorWrites.size()), geometryDescriptorWrites.data(), 0, nullptr);
+	vkUpdateDescriptorSets(vulkan->Device(), static_cast<uint32_t>(writePassDescriptorWrites.size()), writePassDescriptorWrites.data(), 0, nullptr);
 }
 #pragma endregion
 
