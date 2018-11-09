@@ -36,7 +36,7 @@ struct FrameBufferAttachment
 struct VisibilityBuffer
 {
 	VkFramebuffer frameBuffer;
-	FrameBufferAttachment visAndBarys, uvDerivs, depth;
+	FrameBufferAttachment visibility, uvDerivs, depth;
 };
 #pragma endregion
 

@@ -8,7 +8,8 @@ layout(location = 0) in vec3 inPosition;
 layout(location = 2) in vec2 texCoords;
 
 // Descriptors
-layout(binding = 0) uniform UniformBufferObject {
+layout(binding = 0) uniform UniformBufferObject 
+{
     mat4 model;
     mat4 view;
     mat4 proj;

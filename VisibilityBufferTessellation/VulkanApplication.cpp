@@ -72,8 +72,8 @@ void VulkanApplication::CleanUp()
 	// Destroy texture objects
 	vkDestroySampler(vulkan->Device(), textureSampler, nullptr);
 	vkDestroySampler(vulkan->Device(), depthSampler, nullptr);
-	vkDestroyImageView(vulkan->Device(), visibilityBuffer.visAndBarys.imageView, nullptr);
-	vmaDestroyImage(allocator, visibilityBuffer.visAndBarys.image, visibilityBuffer.visAndBarys.imageMemory);
+	vkDestroyImageView(vulkan->Device(), visibilityBuffer.visibility.imageView, nullptr);
+	vmaDestroyImage(allocator, visibilityBuffer.visibility.image, visibilityBuffer.visibility.imageMemory);
 	vkDestroyImageView(vulkan->Device(), visibilityBuffer.uvDerivs.imageView, nullptr);
 	vmaDestroyImage(allocator, visibilityBuffer.uvDerivs.image, visibilityBuffer.uvDerivs.imageMemory);
 	vkDestroyImageView(vulkan->Device(), textureImageView, nullptr);
@@ -415,7 +415,7 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
 	multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
-	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass (vis and barys, uv derivs)
+	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass (vis, uv derivs)
 	VkPipelineColorBlendAttachmentState visBlendAttachment = {};
 	visBlendAttachment.colorWriteMask = 0xf;
 	visBlendAttachment.blendEnable = VK_FALSE;
@@ -519,7 +519,7 @@ void VulkanApplication::CreateVisBuffWritePipelineLayout()
 void VulkanApplication::CreateVisBuffWriteRenderPass()
 {
 	// Create gBuffer attachments
-	CreateFrameBufferAttachment(VK_FORMAT_R32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visAndBarys);
+	CreateFrameBufferAttachment(VK_FORMAT_R32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visibility);
 	CreateFrameBufferAttachment(VK_FORMAT_R32G32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.uvDerivs);
 	CreateDepthResources();
 
@@ -546,7 +546,7 @@ void VulkanApplication::CreateVisBuffWriteRenderPass()
 		}
 	}
 	// Fill Formats
-	attachmentDescs[0].format = visibilityBuffer.visAndBarys.format;
+	attachmentDescs[0].format = visibilityBuffer.visibility.format;
 	attachmentDescs[1].format = visibilityBuffer.uvDerivs.format;
 	attachmentDescs[2].format = visibilityBuffer.depth.format;
 
@@ -695,7 +695,7 @@ void VulkanApplication::CreateFrameBuffers()
 {
 	// Create Visibility Buffer frame buffer
 	std::array<VkImageView, 3> attachments = {};
-	attachments[0] = visibilityBuffer.visAndBarys.imageView;
+	attachments[0] = visibilityBuffer.visibility.imageView;
 	attachments[1] = visibilityBuffer.uvDerivs.imageView;
 	attachments[2] = visibilityBuffer.depth.imageView;
 
@@ -1664,7 +1664,7 @@ void VulkanApplication::CreateShadePassDescriptorSetLayout()
 	textureSamplerBinding.descriptorCount = 1;
 	textureSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
 
-	// Binding 3: Visibility and Barycentric Coords Buffer
+	// Binding 3: Visibility Buffer
 	VkDescriptorSetLayoutBinding visBufferBinding = {};
 	visBufferBinding.binding = 3;
 	visBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
@@ -1761,10 +1761,10 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		modelTextureInfo.imageView = textureImageView;
 		modelTextureInfo.sampler = textureSampler;
 
-		// Visibility and Barycentric Coords Buffer
+		// Visibility Buffer
 		VkDescriptorImageInfo visBufferInfo = {};
 		visBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		visBufferInfo.imageView = visibilityBuffer.visAndBarys.imageView;
+		visBufferInfo.imageView = visibilityBuffer.visibility.imageView;
 		visBufferInfo.sampler = VK_NULL_HANDLE;
 
 		// UV Derivatives Buffer
@@ -1809,7 +1809,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		shadePassDescriptorWrites[2].descriptorCount = 1;
 		shadePassDescriptorWrites[2].pImageInfo = &modelTextureInfo;
 
-		// Binding 3: Visibility and Barycentric Coords Buffer
+		// Binding 3: Visibility Buffer
 		shadePassDescriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		shadePassDescriptorWrites[3].dstSet = shadePassDescriptorSets[i];
 		shadePassDescriptorWrites[3].dstBinding = 3;
