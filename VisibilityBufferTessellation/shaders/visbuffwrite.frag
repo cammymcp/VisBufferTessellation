@@ -12,9 +12,6 @@ layout(early_fragment_tests) in;
 layout(location = 0) in vec2 texCoords;
 layout(location = 1) in flat uint drawID;
 
-// Descriptors
-layout(binding = 1) uniform sampler2D texSampler;
-
 // Out (To Visibility Buffer)
 layout(location = 0) out uint visBuff;
 layout(location = 1) out uvec2 uvDerivs;

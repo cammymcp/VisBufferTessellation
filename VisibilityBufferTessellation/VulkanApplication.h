@@ -137,13 +137,13 @@ namespace vbt
 #pragma endregion
 
 #pragma region Graphics Pipeline Functions
-		void CreateDeferredPipeline();
-		void CreateVisBuffWritePipeline();
 		void CreatePipelineCache();
-		void CreateDeferredPipelineLayout();
+		void CreateVisBuffShadePipeline();
+		void CreateVisBuffWritePipeline();
+		void CreateVisBuffShadePipelineLayout();
 		void CreateVisBuffWritePipelineLayout();
 		void CreateVisBuffWriteRenderPass();
-		void CreateDeferredRenderPass();
+		void CreateVisBuffShadeRenderPass();
 		VkShaderModule CreateShaderModule(const std::vector<char>& code);
 #pragma endregion
 
@@ -155,8 +155,8 @@ namespace vbt
 
 #pragma region Command Buffer Functions
 		void CreateCommandPool();
-		void AllocateDeferredCommandBuffers();
-		void AllocateVisBuffWriteCommandBuffer();
+		void RecordVisBuffShadeCommandBuffers();
+		void RecordVisBuffWriteCommandBuffer();
 		VkCommandBuffer BeginSingleTimeCommands();
 		void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 #pragma endregion
@@ -216,13 +216,13 @@ namespace vbt
 #pragma endregion
 
 #pragma region Graphics Pipeline Objects
-		VkPipeline deferredPipeline;
+		VkPipeline visBuffShadePipeline;
 		VkPipeline visBuffWritePipeline;
 		VkPipelineCache pipelineCache;
-		VkPipelineLayout deferredPipelineLayout;
+		VkPipelineLayout visBuffShadePipelineLayout;
 		VkPipelineLayout visBuffWritePipelineLayout;
 		VkRenderPass visBuffWriteRenderPass;
-		VkRenderPass deferredRenderPass;
+		VkRenderPass visBuffShadeRenderPass;
 #pragma endregion
 
 #pragma region Drawing Objects
@@ -234,15 +234,15 @@ namespace vbt
 #pragma endregion
 
 #pragma region Command Buffer Objects
-		std::vector<VkCommandBuffer> deferredCommandBuffers;
+		std::vector<VkCommandBuffer> visBuffShadeCommandBuffers;
 		VkCommandBuffer visBuffWriteCommandBuffer;
 		VkCommandPool commandPool;
 #pragma endregion
 
 #pragma region Depth Buffer Objects
-		VkImage deferredDepthImage;
-		VmaAllocation deferredDepthImageMemory;
-		VkImageView deferredDepthImageView;
+		VkImage visBuffShadeDepthImage;
+		VmaAllocation visBuffShadeDepthImageMemory;
+		VkImageView visBuffShadeDepthImageView;
 #pragma endregion
 
 #pragma region Buffer Objects
