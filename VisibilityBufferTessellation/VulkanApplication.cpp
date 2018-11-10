@@ -519,8 +519,8 @@ void VulkanApplication::CreateVisBuffWritePipelineLayout()
 void VulkanApplication::CreateVisBuffWriteRenderPass()
 {
 	// Create gBuffer attachments
-	CreateFrameBufferAttachment(VK_FORMAT_R32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visibility);
-	CreateFrameBufferAttachment(VK_FORMAT_R32G32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.uvDerivs);
+	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &visibilityBuffer.visibility); // 32 bit uint will be unpacked into four 8bit floats
+	CreateFrameBufferAttachment(VK_FORMAT_R32G32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &visibilityBuffer.uvDerivs);
 	CreateDepthResources();
 
 	// Create attachment descriptions for the visibility buffer
@@ -1178,7 +1178,7 @@ void VulkanApplication::CreateDepthResources()
 	visibilityBuffer.depth.format = depthFormat;
 
 	// Create Image and ImageView objects
-	CreateImage(vulkan->SwapChainExtent().width, vulkan->SwapChainExtent().height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, visibilityBuffer.depth.image, visibilityBuffer.depth.imageMemory);
+	CreateImage(vulkan->SwapChainExtent().width, vulkan->SwapChainExtent().height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, visibilityBuffer.depth.image, visibilityBuffer.depth.imageMemory);
 	visibilityBuffer.depth.imageView = VulkanCore::CreateImageView(vulkan->Device(), visibilityBuffer.depth.image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 	// Transition depth image for shader usage
@@ -1266,7 +1266,7 @@ void VulkanApplication::CreateVertexBuffer()
 	vmaUnmapMemory(allocator, stagingBufferAllocation);
 
 	// Create vertex buffer on device local memory
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferAllocation);
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferAllocation);
 
 	// Copy data to new vertex buffer
 	CopyBuffer(stagingBuffer, vertexBuffer, bufferSize);
@@ -1291,7 +1291,7 @@ void VulkanApplication::CreateIndexBuffer()
 	vmaUnmapMemory(allocator, stagingBufferAllocation);
 
 	// Create vertex buffer on device local memory
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferAllocation);
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferAllocation);
 
 	// Copy data to new vertex buffer
 	CopyBuffer(stagingBuffer, indexBuffer, bufferSize);
@@ -1661,9 +1661,9 @@ void VulkanApplication::CreateDescriptorPool()
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[0].descriptorCount = static_cast<uint32_t>((vulkan->SwapChainImages().size()) * 2) + 1; // Extra mvp ubo for the write pass
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(vulkan->SwapChainImages().size());
-	poolSizes[2].type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-	poolSizes[2].descriptorCount = (static_cast<uint32_t>(vulkan->SwapChainImages().size())) * 3; // 3 input attachments per swapchain image
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(vulkan->SwapChainImages().size()) * 4; // 4 sampled images per swapchain image
+	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	poolSizes[2].descriptorCount = (static_cast<uint32_t>(vulkan->SwapChainImages().size())) * 2; // 2 storage buffers per swapchain image
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1685,7 +1685,7 @@ void VulkanApplication::CreateShadePassDescriptorSetLayout()
 	modelUboLayoutBinding.binding = 0;
 	modelUboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	modelUboLayoutBinding.descriptorCount = 1;
-	modelUboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // Specify that this descriptor will be used in the vertex shader
+	modelUboLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Specify that this descriptor will be used in the fragment shader
 
 	// Binding 1: Fullscreen Quad Uniform Buffer
 	VkDescriptorSetLayoutBinding quadUboLayoutBinding = {};
@@ -1699,31 +1699,45 @@ void VulkanApplication::CreateShadePassDescriptorSetLayout()
 	textureSamplerBinding.binding = 2;
 	textureSamplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	textureSamplerBinding.descriptorCount = 1;
-	textureSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
+	textureSamplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; 
 
 	// Binding 3: Visibility Buffer
 	VkDescriptorSetLayoutBinding visBufferBinding = {};
 	visBufferBinding.binding = 3;
-	visBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	visBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	visBufferBinding.descriptorCount = 1;
-	visBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
+	visBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	// Binding 4: UV Derivatives Buffer
 	VkDescriptorSetLayoutBinding uvDerivBufferBinding = {};
 	uvDerivBufferBinding.binding = 4;
-	uvDerivBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	uvDerivBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	uvDerivBufferBinding.descriptorCount = 1;
-	uvDerivBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
+	uvDerivBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	// Binding 5: Depth Buffer
 	VkDescriptorSetLayoutBinding depthBufferBinding = {};
 	depthBufferBinding.binding = 5;
-	depthBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	depthBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	depthBufferBinding.descriptorCount = 1;
-	depthBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Used in the fragment shader
+	depthBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	// Binding 6: Index Buffer
+	VkDescriptorSetLayoutBinding indexBufferBinding = {};
+	indexBufferBinding.binding = 6;
+	indexBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	indexBufferBinding.descriptorCount = 1;
+	indexBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; 
+
+	// Binding 7: Vertex Buffer
+	VkDescriptorSetLayoutBinding vertexBufferBinding = {};
+	vertexBufferBinding.binding = 7;
+	vertexBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	vertexBufferBinding.descriptorCount = 1;
+	vertexBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	// Create descriptor set layout
-	std::array<VkDescriptorSetLayoutBinding, 6> bindings = { modelUboLayoutBinding, quadUboLayoutBinding, textureSamplerBinding, visBufferBinding, uvDerivBufferBinding, depthBufferBinding };
+	std::array<VkDescriptorSetLayoutBinding, 8> bindings = { modelUboLayoutBinding, quadUboLayoutBinding, textureSamplerBinding, visBufferBinding, uvDerivBufferBinding, depthBufferBinding, indexBufferBinding, vertexBufferBinding };
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1802,22 +1816,34 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		VkDescriptorImageInfo visBufferInfo = {};
 		visBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		visBufferInfo.imageView = visibilityBuffer.visibility.imageView;
-		visBufferInfo.sampler = VK_NULL_HANDLE;
+		visBufferInfo.sampler = depthSampler;
 
 		// UV Derivatives Buffer
 		VkDescriptorImageInfo uvDerivBufferInfo = {};
 		uvDerivBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		uvDerivBufferInfo.imageView = visibilityBuffer.uvDerivs.imageView;
-		uvDerivBufferInfo.sampler = VK_NULL_HANDLE;
+		uvDerivBufferInfo.sampler = depthSampler;
 
 		// Depth Buffer
 		VkDescriptorImageInfo depthBufferInfo = {};
 		depthBufferInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		depthBufferInfo.imageView = visibilityBuffer.depth.imageView;
-		depthBufferInfo.sampler = VK_NULL_HANDLE;
+		depthBufferInfo.sampler = depthSampler;
+
+		// Index Buffer
+		VkDescriptorBufferInfo indexBufferInfo = {};
+		indexBufferInfo.buffer = indexBuffer;
+		indexBufferInfo.offset = 0;
+		indexBufferInfo.range = sizeof(indices[0]) * indices.size();
+
+		// Vertex Buffer
+		VkDescriptorBufferInfo vertexBufferInfo = {};
+		vertexBufferInfo.buffer = vertexBuffer;
+		vertexBufferInfo.offset = 0;
+		vertexBufferInfo.range = sizeof(vertices[0]) * vertices.size();
 
 		// Create a descriptor write for each descriptor in the set
-		std::array<VkWriteDescriptorSet, 6> shadePassDescriptorWrites = {};
+		std::array<VkWriteDescriptorSet, 8> shadePassDescriptorWrites = {};
 
 		// Binding 0: Vertex Shader Uniform Buffer of loaded model
 		shadePassDescriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1851,7 +1877,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		shadePassDescriptorWrites[3].dstSet = shadePassDescriptorSets[i];
 		shadePassDescriptorWrites[3].dstBinding = 3;
 		shadePassDescriptorWrites[3].dstArrayElement = 0;
-		shadePassDescriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		shadePassDescriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		shadePassDescriptorWrites[3].descriptorCount = 1;
 		shadePassDescriptorWrites[3].pImageInfo = &visBufferInfo;
 
@@ -1860,7 +1886,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		shadePassDescriptorWrites[4].dstSet = shadePassDescriptorSets[i];
 		shadePassDescriptorWrites[4].dstBinding = 4;
 		shadePassDescriptorWrites[4].dstArrayElement = 0;
-		shadePassDescriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		shadePassDescriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		shadePassDescriptorWrites[4].descriptorCount = 1;
 		shadePassDescriptorWrites[4].pImageInfo = &uvDerivBufferInfo;
 
@@ -1869,9 +1895,27 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		shadePassDescriptorWrites[5].dstSet = shadePassDescriptorSets[i];
 		shadePassDescriptorWrites[5].dstBinding = 5;
 		shadePassDescriptorWrites[5].dstArrayElement = 0;
-		shadePassDescriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		shadePassDescriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		shadePassDescriptorWrites[5].descriptorCount = 1;
 		shadePassDescriptorWrites[5].pImageInfo = &depthBufferInfo;
+
+		// Binding 6: Index Buffer
+		shadePassDescriptorWrites[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		shadePassDescriptorWrites[6].dstSet = shadePassDescriptorSets[i];
+		shadePassDescriptorWrites[6].dstBinding = 6;
+		shadePassDescriptorWrites[6].dstArrayElement = 0;
+		shadePassDescriptorWrites[6].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		shadePassDescriptorWrites[6].descriptorCount = 1;
+		shadePassDescriptorWrites[6].pBufferInfo = &indexBufferInfo;
+
+		// Binding 7: Vertex Buffer
+		shadePassDescriptorWrites[7].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		shadePassDescriptorWrites[7].dstSet = shadePassDescriptorSets[i];
+		shadePassDescriptorWrites[7].dstBinding = 7;
+		shadePassDescriptorWrites[7].dstArrayElement = 0;
+		shadePassDescriptorWrites[7].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		shadePassDescriptorWrites[7].descriptorCount = 1;
+		shadePassDescriptorWrites[7].pBufferInfo = &vertexBufferInfo;
 
 		vkUpdateDescriptorSets(vulkan->Device(), static_cast<uint32_t>(shadePassDescriptorWrites.size()), shadePassDescriptorWrites.data(), 0, nullptr);
 	}

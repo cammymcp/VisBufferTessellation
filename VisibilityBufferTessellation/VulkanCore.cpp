@@ -249,7 +249,7 @@ bool VulkanCore::isDeviceSuitable(VkPhysicalDevice device)
 		swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
 	}
 
-	return indices.isSuitable() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && discrete && supportedFeatures.geometryShader;
+	return indices.isSuitable() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && discrete && supportedFeatures.geometryShader && supportedFeatures.fragmentStoresAndAtomics;
 }
 
 QueueFamilyIndices VulkanCore::FindQueueFamilies(VkPhysicalDevice device)
@@ -315,6 +315,8 @@ void VulkanCore::CreateLogicalDevice()
 	// Define required device features
 	VkPhysicalDeviceFeatures deviceFeatures = {};
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
+	deviceFeatures.geometryShader = VK_TRUE;
+	deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
 
 	// Create the logical device
 	VkDeviceCreateInfo createInfo = {};
