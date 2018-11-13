@@ -97,6 +97,13 @@ namespace std
 		}
 	};
 }
+
+// 16-byte aligned vertex attributes. 
+typedef struct VertexAttributes
+{
+	glm::vec4 posXYZcolX;
+	glm::vec4 colYZtexXY;
+};
 #pragma endregion
 
 #pragma region Uniform Buffers
@@ -104,6 +111,7 @@ struct UniformBufferObject
 {
 	glm::mat4 model;
 	glm::mat4 view;
+	glm::mat4 invView;
 	glm::mat4 proj;
 };
 #pragma endregion
@@ -173,6 +181,7 @@ namespace vbt
 
 #pragma region Buffer Functions
 		void CreateVertexBuffer();
+		void CreateAttributeBuffer();
 		void CreateIndexBuffer();
 		void CreateUniformBuffers();
 		void UpdateQuadUniformBuffer(uint32_t currentImage);
@@ -249,8 +258,10 @@ namespace vbt
 		VmaAllocator allocator;
 		VkBuffer vertexBuffer;
 		VkBuffer indexBuffer;
+		VkBuffer vertexAttributeBuffer;
 		VmaAllocation indexBufferAllocation;
 		VmaAllocation vertexBufferAllocation;
+		VmaAllocation vertexAttributeBufferAllocation;
 		VkBuffer fsQuadVertexBuffer;
 		VkBuffer fsQuadIndexBuffer;
 		VmaAllocation fsQuadVertexMemory;
@@ -272,6 +283,7 @@ namespace vbt
 #pragma region Model Objects
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
+		std::vector<VertexAttributes> vertexAttributeData;
 #pragma endregion
 
 #pragma region Descriptor Objects
@@ -280,6 +292,10 @@ namespace vbt
 		VkDescriptorSetLayout shadePassDescriptorSetLayout;
 		VkDescriptorSet writePassDescriptorSet;
 		VkDescriptorSetLayout writePassDescriptorSetLayout;
+#pragma endregion
+
+#pragma region Debug Objects
+		FrameBufferAttachment debugAttachment;
 #pragma endregion
 	};
 }
