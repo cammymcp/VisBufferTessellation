@@ -14,7 +14,7 @@ layout(location = 1) in flat uint drawID;
 
 // Out (To Visibility Buffer)
 layout(location = 0) out vec4 visBuff;
-layout(location = 1) out uvec2 uvDerivs;
+layout(location = 1) out vec4 uvDerivs;
 
 // Engel's packing function
 uint calculateOutputVBID(bool opaque, uint drawID, uint primitiveID)
@@ -33,6 +33,6 @@ void main()
 	visBuff = unpackUnorm4x8(calculateOutputVBID(true, drawID, gl_PrimitiveID));
 
 	// Fill UV derivatives buffer
-	uvDerivs.x = packSnorm2x16(dFdx(texCoords));
-	uvDerivs.y = packSnorm2x16(dFdy(texCoords));
+	uvDerivs.xy = dFdx(texCoords);
+	uvDerivs.zw = dFdy(texCoords);
 }

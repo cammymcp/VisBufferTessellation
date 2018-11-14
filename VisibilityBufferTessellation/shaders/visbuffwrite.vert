@@ -33,7 +33,6 @@ void main()
 	
 	// Tex
 	outTexCoord = texCoords;
-	outTexCoord.t = 1.0 - outTexCoord.t; // Flip y component of texcoords to match Vulkan's UV coord system
 
 	// DrawID
 	drawID = gl_DrawIDARB;

@@ -16,7 +16,7 @@ struct Index
 	uint val;
 };
 
-struct BarycentricCoordinates
+struct DerivativesOutput
 {
 	vec3 dbDx;
 	vec3 dbDy;
@@ -30,40 +30,40 @@ struct GradientInterpolationResults
 };
 
 // Interpolate 2D attributes using the partial derivatives and generates dx and dy for texture sampling.
-GradientInterpolationResults interpolateAttributeWithGradient(mat3x2 attributes, vec3 db_dx, vec3 db_dy, vec2 d)
+GradientInterpolationResults interpolateAttributeWithGradient(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 d, vec2 oneOverRes)
 {
 	vec3 attr0 = vec3(attributes[0].x, attributes[1].x, attributes[2].x);
 	vec3 attr1 = vec3(attributes[0].y, attributes[1].y, attributes[2].y);
-	vec2 attribute_x = vec2(dot(db_dx,attr0), dot(db_dx,attr1));
-	vec2 attribute_y = vec2(dot(db_dy,attr0), dot(db_dy,attr1));
+	vec2 attribute_x = vec2(dot(dbDx,attr0), dot(dbDx,attr1));
+	vec2 attribute_y = vec2(dot(dbDy,attr0), dot(dbDy,attr1));
 	vec2 attribute_s = attributes[0];
 	
 	GradientInterpolationResults result;
-	result.dx = attribute_x;
-	result.dy = attribute_y;
+	result.dx = attribute_x * oneOverRes.x;
+	result.dy = attribute_y * oneOverRes.y;
 	result.interp = (attribute_s + d.x * attribute_x + d.y * attribute_y);
 	return result;
 }
 
-// Engel's barycentric coord partial derivs function. 
-// Computes the partial derivatives of a triangle from the projected screen space vertices
-BarycentricCoordinates ComputeBarycentricCoordinates(vec2 v[3])
+// Engel's barycentric coord partial derivs function. Follows equation from [Schied][Dachsbacher]
+// Computes the partial derivatives of point's barycentric coordinates from the projected screen space vertices
+DerivativesOutput ComputePartialDerivatives(vec2 v[3])
 {
-	BarycentricCoordinates baryCoords;
+	DerivativesOutput derivatives;
 	float d = 1.0 / determinant(mat2(v[2] - v[1], v[0] - v[1]));
-	baryCoords.dbDx = vec3(v[1].y - v[2].y, v[2].y - v[0].y, v[0].y - v[1].y) * d;
-	baryCoords.dbDy = vec3(v[2].x - v[1].x, v[0].x - v[2].x, v[1].x - v[0].x) * d;
-	return baryCoords;
+	derivatives.dbDx = vec3(v[1].y - v[2].y, v[2].y - v[0].y, v[0].y - v[1].y) * d;
+	derivatives.dbDy = vec3(v[2].x - v[1].x, v[0].x - v[2].x, v[1].x - v[0].x) * d;
+	return derivatives;
 }
 
-vec3 InterpolateAttribute(mat3 attributes, vec3 dbDx, vec3 dbDy, vec2 delta)
-{
-	vec3 attribute_x = attributes * dbDx;
-	vec3 attribute_y = attributes * dbDy;
-	vec3 attribute_s = attributes[0];
-	
-	return (attribute_s + delta.x * attribute_x + delta.y * attribute_y);
-}
+//vec3 InterpolateAttribute(mat3 attributes, vec3 dbDx, vec3 dbDy, vec2 delta)
+//{
+//	vec3 attribute_x = attributes * dbDx;
+//	vec3 attribute_y = attributes * dbDy;
+//	vec3 attribute_s = attributes[0];
+//	
+//	return (attribute_s + delta.x * attribute_x + delta.y * attribute_y);
+//}
 
 vec2 InterpolateAttribute(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 delta)
 {
@@ -86,8 +86,7 @@ float InterpolateAttribute(vec3 attributes, vec3 dbDx, vec3 dbDy, vec2 delta)
 }
 
 // In
-layout(location = 0) in vec2 texCoords;
-layout(location = 1) in vec2 inScreenPos;
+layout(location = 0) in vec2 inScreenPos;
 
 // Descriptors
 layout(set = 0, binding = 0) uniform UniformBufferObject 
@@ -151,6 +150,7 @@ void main()
 		vec4 clipPos0 = ubo.model * ubo.view * ubo.proj * vec4(vert0Pos, 1.0f);
 		vec4 clipPos1 = ubo.model * ubo.view * ubo.proj * vec4(vert1Pos, 1.0f);
 		vec4 clipPos2 = ubo.model * ubo.view * ubo.proj * vec4(vert2Pos, 1.0f);
+		debug = vec4(clipPos1.x, clipPos1.y, clipPos1.z, clipPos1.w);
 
 		// Pre-calculate 1 over w components
 		vec3 oneOverW = 1.0f / vec3(clipPos0.w, clipPos1.w, clipPos2.w);
@@ -162,13 +162,13 @@ void main()
 		vec2 screenPositions[3] = { clipPos0.xy, clipPos1.xy, clipPos2.xy };
 
 		// Get barycentric coordinates for attribute interpolation
-		BarycentricCoordinates baryCoords = ComputeBarycentricCoordinates(screenPositions);
+		DerivativesOutput derivatives = ComputePartialDerivatives(screenPositions);
 
 		// Get delta vector that describes current screen point relative to vertex 0
 		vec2 delta = inScreenPos + -screenPositions[0];
 
 		// Construct w component of screen point from interpolating 1/w
-		float w = 1.0f / InterpolateAttribute(oneOverW, baryCoords.dbDx, baryCoords.dbDy, delta);
+		float w = 1.0f / InterpolateAttribute(oneOverW, derivatives.dbDx, derivatives.dbDy, delta);
 
 		// Construct Z component at this screen point using necessary components in projection matrix
 		float z = w * ubo.proj[2][2] + ubo.proj[3][2];
@@ -176,12 +176,11 @@ void main()
 		// Now calculate the world position of this point using projected position and inverse view matrix 
 		vec4 projectedPosition = vec4(inScreenPos * w, z, w);
 		vec3 position = (ubo.invView * projectedPosition).xyz;
-		debug = vec4(position.x, position.y, position.z, 1.0f);
 
 		// Get tex partial derivatives from buffer
-		//uvec2 texDerivsRaw = uvec2(texelFetch(inputUVDerivs, ivec2(gl_FragCoord.xy), 0).xy);
-		//vec2 texDx = unpackSnorm2x16(texDerivsRaw.x);
-		//vec2 texDy = unpackSnorm2x16(texDerivsRaw.y);
+		vec4 texDerivsRaw = texelFetch(inputUVDerivs, ivec2(gl_FragCoord.xy), 0);
+		vec2 texDx = texDerivsRaw.xy;
+		vec2 texDy = texDerivsRaw.zw;
 
 		// Interpolate texture coordinates
 		mat3x2 triTexCoords =
@@ -190,10 +189,13 @@ void main()
 			vec2 (vertexBuffer[triVert1Index].colYZtexXY.z, vertexBuffer[triVert1Index].colYZtexXY.w),
 			vec2 (vertexBuffer[triVert2Index].colYZtexXY.z, vertexBuffer[triVert2Index].colYZtexXY.w)
 		};
-		GradientInterpolationResults fragTexCoords = interpolateAttributeWithGradient(triTexCoords, baryCoords.dbDx, baryCoords.dbDy, delta);
+
+		vec2 oneOverRes = vec2(1.0f / 800, 1.0f / 600);
+		GradientInterpolationResults fragTexCoords = interpolateAttributeWithGradient(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta, oneOverRes);
 
 		// Get fragment colour from texture
-		vec4 textureDiffuseColour = textureGrad(textureSampler, fragTexCoords.interp * w, fragTexCoords.dx * w, fragTexCoords.dy * w);
+		vec4 textureDiffuseColour = textureGrad(textureSampler, fragTexCoords.interp * w, texDx, texDy);
+		//textureDiffuseColour = texture(textureSampler, triTexCoords[0]);
 
 		// Final Fragment colour
 		outColour = textureDiffuseColour;

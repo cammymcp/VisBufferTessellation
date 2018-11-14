@@ -528,7 +528,7 @@ void VulkanApplication::CreateVisBuffWriteRenderPass()
 {
 	// Create gBuffer attachments
 	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &visibilityBuffer.visibility); // 32 bit uint will be unpacked into four 8bit floats
-	CreateFrameBufferAttachment(VK_FORMAT_R32G32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &visibilityBuffer.uvDerivs);
+	CreateFrameBufferAttachment(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &visibilityBuffer.uvDerivs);
 	CreateDepthResources();
 
 	// Create attachment descriptions for the visibility buffer
@@ -1699,7 +1699,7 @@ void VulkanApplication::LoadModel()
 			vertex.texCoord =
 			{
 				attribute.texcoords[2 * index.texcoord_index + 0],
-				attribute.texcoords[2 * index.texcoord_index + 1] 
+				1.0f - attribute.texcoords[2 * index.texcoord_index + 1] // Flip texture Y coordinate to match vulkan coord system
 			};
 			vertexAttributes.colYZtexXY.z = vertex.texCoord.x;
 			vertexAttributes.colYZtexXY.w = vertex.texCoord.y;

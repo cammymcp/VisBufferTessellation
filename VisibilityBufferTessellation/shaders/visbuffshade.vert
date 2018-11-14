@@ -19,8 +19,7 @@ layout(binding = 1) uniform QuadUniformBufferObject
 } quadubo;
 
 // Out
-layout(location = 0) out vec2 outTexCoord;
-layout(location = 1) out vec2 outScreenPos;
+layout(location = 0) out vec2 outScreenPos;
 out gl_PerVertex
 {
 	vec4 gl_Position;
@@ -28,8 +27,9 @@ out gl_PerVertex
 
 void main() 
 {
-    outTexCoord = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
-	vec4 position = vec4(outTexCoord * 2.0f - 1.0f, 0.0f, 1.0f);
+    vec2 tex = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
+	vec4 position = vec4(tex * 2.0f - 1.0f, 0.0f, 1.0f);
+	
 	outScreenPos = position.xy;
 	gl_Position = position;
 }
