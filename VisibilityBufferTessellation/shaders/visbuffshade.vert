@@ -2,22 +2,6 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
-// Descriptors
-layout(binding = 0) uniform ModelUniformBufferObject 
-{
-    mat4 model;
-    mat4 view;
-	mat4 invView;
-    mat4 proj;
-} modelubo;
-layout(binding = 1) uniform QuadUniformBufferObject 
-{
-    mat4 model;
-    mat4 view;
-	mat4 invView;
-    mat4 proj;
-} quadubo;
-
 // Out
 layout(location = 0) out vec2 outScreenPos;
 out gl_PerVertex
@@ -27,8 +11,11 @@ out gl_PerVertex
 
 void main() 
 {
-    vec2 tex = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
-	vec4 position = vec4(tex * 2.0f - 1.0f, 0.0f, 1.0f);
+	// Create a full screen triangle based on vertex index.
+    vec4 position;
+	position.x = (gl_VertexIndex == 2) ?  3.0f : -1.0f;
+	position.y = (gl_VertexIndex == 0) ? -3.0f :  1.0f;
+	position.zw = vec2(0.0f, 1.0f);
 	
 	outScreenPos = position.xy;
 	gl_Position = position;

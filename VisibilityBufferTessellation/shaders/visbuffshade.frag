@@ -1,7 +1,6 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
-#extension GL_KHR_vulkan_glsl : enable
 
 #define PRIMITIVE_ID_BITS 23
 
@@ -15,22 +14,38 @@ struct Index
 {
 	uint val;
 };
-
 struct DerivativesOutput
 {
 	vec3 dbDx;
 	vec3 dbDy;
 };
 
-struct GradientInterpolationResults
+// In
+layout(location = 0) in vec2 inScreenPos;
+
+// Out
+layout(location = 0) out vec4 outColour;
+layout(location = 1) out vec4 debug;
+
+// Descriptors
+layout (set = 0, binding = 0) uniform sampler2D textureSampler;
+layout (set = 0, binding = 1) uniform sampler2D inputVisibility;
+layout(set = 0, binding = 2) uniform UniformBufferObject 
 {
-	vec2 interp;
-	vec2 dx;
-	vec2 dy;
+    mat4 mvp;
+    mat4 proj;
+} ubo;
+layout (std430, set = 0, binding = 3) readonly buffer IndxBuff
+{
+	Index indexBuffer[];
+};
+layout (std430, set = 0, binding = 4) readonly buffer VertBuff
+{
+	Vertex vertexBuffer[];
 };
 
 // Interpolate 2D attributes using the partial derivatives and generates dx and dy for texture sampling.
-GradientInterpolationResults interpolateAttributeWithGradient(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 d, vec2 oneOverRes)
+vec2 Interpolate2DAttributes(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 d)
 {
 	vec3 attr0 = vec3(attributes[0].x, attributes[1].x, attributes[2].x);
 	vec3 attr1 = vec3(attributes[0].y, attributes[1].y, attributes[2].y);
@@ -38,10 +53,7 @@ GradientInterpolationResults interpolateAttributeWithGradient(mat3x2 attributes,
 	vec2 attribute_y = vec2(dot(dbDy,attr0), dot(dbDy,attr1));
 	vec2 attribute_s = attributes[0];
 	
-	GradientInterpolationResults result;
-	result.dx = attribute_x * oneOverRes.x;
-	result.dy = attribute_y * oneOverRes.y;
-	result.interp = (attribute_s + d.x * attribute_x + d.y * attribute_y);
+	vec2 result = (attribute_s + d.x * attribute_x + d.y * attribute_y);
 	return result;
 }
 
@@ -56,76 +68,18 @@ DerivativesOutput ComputePartialDerivatives(vec2 v[3])
 	return derivatives;
 }
 
-//vec3 InterpolateAttribute(mat3 attributes, vec3 dbDx, vec3 dbDy, vec2 delta)
-//{
-//	vec3 attribute_x = attributes * dbDx;
-//	vec3 attribute_y = attributes * dbDy;
-//	vec3 attribute_s = attributes[0];
-//	
-//	return (attribute_s + delta.x * attribute_x + delta.y * attribute_y);
-//}
-
-vec2 InterpolateAttribute(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 delta)
-{
-	vec3 attr0 = vec3(attributes[0].x, attributes[1].x, attributes[2].x);
-	vec3 attr1 = vec3(attributes[0].y, attributes[1].y, attributes[2].y);
-	vec2 attribute_x = vec2(dot(dbDx,attr0), dot(dbDx,attr1));
-	vec2 attribute_y = vec2(dot(dbDy,attr0), dot(dbDy,attr1));
-	vec2 attribute_s = attributes[0];
-	
-	return (attribute_s + delta.x * attribute_x + delta.y * attribute_y);
-}
-
-float InterpolateAttribute(vec3 attributes, vec3 dbDx, vec3 dbDy, vec2 delta)
-{
-	float attribute_x = dot(attributes, dbDx);
-	float attribute_y = dot(attributes, dbDy);
-	float attribute_s = attributes[0];
-	
-	return (attribute_s + delta.x * attribute_x + delta.y * attribute_y);
-}
-
-// In
-layout(location = 0) in vec2 inScreenPos;
-
-// Descriptors
-layout(set = 0, binding = 0) uniform UniformBufferObject 
-{
-    mat4 model;
-    mat4 view;
-	mat4 invView;
-    mat4 proj;
-} ubo;
-layout (set = 0, binding = 2) uniform sampler2D textureSampler;
-layout (set = 0, binding = 3) uniform sampler2D inputVisibility;
-layout (set = 0, binding = 4) uniform sampler2D inputUVDerivs;
-layout (set = 0, binding = 5) uniform sampler2D inputDepth;
-layout (std430, set = 0, binding = 6) readonly buffer IndxBuff
-{
-	Index indexBuffer[];
-};
-layout (std430, set = 0, binding = 7) readonly buffer VertBuff
-{
-	Vertex vertexBuffer[];
-};
-
-// Out
-layout(location = 0) out vec4 outColour;
-layout(location = 1) out vec4 debug;
-
 void main() 
 {
 	// Unpack triangle ID and draw ID from visibility buffer
 	vec4 visibilityRaw = texelFetch(inputVisibility, ivec2(gl_FragCoord.xy), 0);
-	uint alphaBitDrawIdTriId = packUnorm4x8(visibilityRaw);		
+	uint DrawIdTriId = packUnorm4x8(visibilityRaw);		
 	debug = vec4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	// If this pixel doesn't contain triangle data, return early
 	if (length(visibilityRaw) != 0)
 	{
-		uint drawID = (alphaBitDrawIdTriId >> 23) & 0x000000FF; // Draw ID the number of draw call to which the triangle belongs
-		uint triangleID = (alphaBitDrawIdTriId & 0x007FFFFF); // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID
-		uint alphaBit = (alphaBitDrawIdTriId >> 31); // Not using this at the moment	
+		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the number of draw call to which the triangle belongs
+		uint triangleID = (DrawIdTriId & 0x007FFFFF); // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID
 		
 		// Index of the first vertex of this draw call's geometry
 		uint startIndex = drawID; // There's only one draw call at the moment, so drawID should always be 0
@@ -141,19 +95,17 @@ void main()
 		uint triVert2Index = indexBuffer[triVert3IndexBufferPosition].val;
 
 		// Load vertex data of the 3 vertices
-		Vertex vert0 = vertexBuffer[triVert0Index];
-		vec3 vert0Pos = vec3(vertexBuffer[triVert0Index].posXYZcolX.x, vertexBuffer[triVert0Index].posXYZcolX.y, vertexBuffer[triVert0Index].posXYZcolX.z);
-		vec3 vert1Pos = vec3(vertexBuffer[triVert1Index].posXYZcolX.x, vertexBuffer[triVert1Index].posXYZcolX.y, vertexBuffer[triVert1Index].posXYZcolX.z);
-		vec3 vert2Pos = vec3(vertexBuffer[triVert2Index].posXYZcolX.x, vertexBuffer[triVert2Index].posXYZcolX.y, vertexBuffer[triVert2Index].posXYZcolX.z);
+		vec3 vert0Pos = vertexBuffer[triVert0Index].posXYZcolX.xyz;
+		vec3 vert1Pos = vertexBuffer[triVert1Index].posXYZcolX.xyz;
+		vec3 vert2Pos = vertexBuffer[triVert2Index].posXYZcolX.xyz;
 
 		// Transform positions to clip space
-		vec4 clipPos0 = ubo.model * ubo.view * ubo.proj * vec4(vert0Pos, 1.0f);
-		vec4 clipPos1 = ubo.model * ubo.view * ubo.proj * vec4(vert1Pos, 1.0f);
-		vec4 clipPos2 = ubo.model * ubo.view * ubo.proj * vec4(vert2Pos, 1.0f);
-		debug = vec4(clipPos1.x, clipPos1.y, clipPos1.z, clipPos1.w);
+		vec4 clipPos0 = ubo.mvp * vec4(vert0Pos, 1);
+		vec4 clipPos1 = ubo.mvp * vec4(vert1Pos, 1);
+		vec4 clipPos2 = ubo.mvp * vec4(vert2Pos, 1);
 
 		// Pre-calculate 1 over w components
-		vec3 oneOverW = 1.0f / vec3(clipPos0.w, clipPos1.w, clipPos2.w);
+		vec3 oneOverW = 1.0 / vec3(clipPos0.w, clipPos1.w, clipPos2.w);
 
 		// Calculate 2D screen positions
 		clipPos0 *= oneOverW[0];
@@ -167,21 +119,6 @@ void main()
 		// Get delta vector that describes current screen point relative to vertex 0
 		vec2 delta = inScreenPos + -screenPositions[0];
 
-		// Construct w component of screen point from interpolating 1/w
-		float w = 1.0f / InterpolateAttribute(oneOverW, derivatives.dbDx, derivatives.dbDy, delta);
-
-		// Construct Z component at this screen point using necessary components in projection matrix
-		float z = w * ubo.proj[2][2] + ubo.proj[3][2];
-
-		// Now calculate the world position of this point using projected position and inverse view matrix 
-		vec4 projectedPosition = vec4(inScreenPos * w, z, w);
-		vec3 position = (ubo.invView * projectedPosition).xyz;
-
-		// Get tex partial derivatives from buffer
-		vec4 texDerivsRaw = texelFetch(inputUVDerivs, ivec2(gl_FragCoord.xy), 0);
-		vec2 texDx = texDerivsRaw.xy;
-		vec2 texDy = texDerivsRaw.zw;
-
 		// Interpolate texture coordinates
 		mat3x2 triTexCoords =
 		{
@@ -189,13 +126,11 @@ void main()
 			vec2 (vertexBuffer[triVert1Index].colYZtexXY.z, vertexBuffer[triVert1Index].colYZtexXY.w),
 			vec2 (vertexBuffer[triVert2Index].colYZtexXY.z, vertexBuffer[triVert2Index].colYZtexXY.w)
 		};
-
-		vec2 oneOverRes = vec2(1.0f / 800, 1.0f / 600);
-		GradientInterpolationResults fragTexCoords = interpolateAttributeWithGradient(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta, oneOverRes);
+		vec2 interpTexCoords = Interpolate2DAttributes(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta);
+		debug = vec4(interpTexCoords, 0.0f, 1.0f);
 
 		// Get fragment colour from texture
-		vec4 textureDiffuseColour = textureGrad(textureSampler, fragTexCoords.interp * w, texDx, texDy);
-		//textureDiffuseColour = texture(textureSampler, triTexCoords[0]);
+		vec4 textureDiffuseColour = texture(textureSampler, interpTexCoords);
 
 		// Final Fragment colour
 		outColour = textureDiffuseColour;

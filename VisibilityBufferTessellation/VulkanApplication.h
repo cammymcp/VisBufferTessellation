@@ -36,7 +36,7 @@ struct FrameBufferAttachment
 struct VisibilityBuffer
 {
 	VkFramebuffer frameBuffer;
-	FrameBufferAttachment visibility, uvDerivs, depth;
+	FrameBufferAttachment visibility, depth;
 };
 #pragma endregion
 
@@ -109,10 +109,10 @@ typedef struct VertexAttributes
 #pragma region Uniform Buffers
 struct UniformBufferObject
 {
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 invView;
+	glm::mat4 mvp;
 	glm::mat4 proj;
+	//glm::mat4 view;
+	//glm::mat4 invViewProj;
 };
 #pragma endregion
 
@@ -169,10 +169,6 @@ namespace vbt
 		void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 #pragma endregion
 
-#pragma region Deferred Rendering Functions
-		void CreateFullScreenQuad();
-#pragma endregion
-
 #pragma region Depth Buffer Functions
 		void CreateDepthResources();
 		VkFormat FindDepthFormat();
@@ -184,7 +180,6 @@ namespace vbt
 		void CreateAttributeBuffer();
 		void CreateIndexBuffer();
 		void CreateUniformBuffers();
-		void UpdateQuadUniformBuffer(uint32_t currentImage);
 		void UpdateMVPUniformBuffer();
 		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage allocUsage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VmaAllocation& allocation);
 		void CreateVmaAllocator();
@@ -262,12 +257,6 @@ namespace vbt
 		VmaAllocation indexBufferAllocation;
 		VmaAllocation vertexBufferAllocation;
 		VmaAllocation vertexAttributeBufferAllocation;
-		VkBuffer fsQuadVertexBuffer;
-		VkBuffer fsQuadIndexBuffer;
-		VmaAllocation fsQuadVertexMemory;
-		VmaAllocation fsQuadIndexMemory;
-		std::vector<VkBuffer> quadUniformBuffers;
-		std::vector<VmaAllocation> quadUniformBufferAllocations;
 		VkBuffer mvpUniformBuffer;
 		VmaAllocation mvpUniformBufferAllocation;
 #pragma endregion
