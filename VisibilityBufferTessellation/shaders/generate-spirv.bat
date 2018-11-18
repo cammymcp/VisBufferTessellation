@@ -1,7 +1,5 @@
-glslangvalidator -V debug.vert -o debug.vert.spv
-glslangvalidator -V debug.frag -o debug.frag.spv
-glslangvalidator -V deferred.vert -o deferred.vert.spv
-glslangvalidator -V deferred.frag -o deferred.frag.spv
-glslangvalidator -V geometry.vert -o geometry.vert.spv
-glslangvalidator -V geometry.frag -o geometry.frag.spv
-
+glslangvalidator -V visbuffshade.vert -o visbuffshade.vert.spv
+glslangvalidator -V visbuffshade.frag -o visbuffshade.frag.spv
+glslangvalidator -V visbuffwrite.vert -o visbuffwrite.vert.spv
+glslangvalidator -V visbuffwrite.frag -o visbuffwrite.frag.spv
+pause
