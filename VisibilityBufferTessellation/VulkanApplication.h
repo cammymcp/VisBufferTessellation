@@ -99,7 +99,7 @@ namespace std
 }
 
 // 16-byte aligned vertex attributes. 
-typedef struct VertexAttributes
+struct VertexAttributes
 {
 	glm::vec4 posXYZcolX;
 	glm::vec4 colYZtexXY;

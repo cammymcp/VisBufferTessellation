@@ -1,4 +1,5 @@
 #include "VulkanCore.h"
+#include "HelperFunctions.h"
 
 namespace vbt
 {
@@ -8,7 +9,7 @@ namespace vbt
 		CreateInstance();
 		SetupDebugCallback();
 		CreateSurface(window);
-		SelectPhysicalDevice();
+		physicalDevice.Init(instance, surface);
 		CreateLogicalDevice();
 		CreateSwapChain(window);
 		CreateSwapChainImageViews();
@@ -69,7 +70,7 @@ namespace vbt
 		// Provide some information about the app (optional)
 		VkApplicationInfo appInfo = {};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		appInfo.pApplicationName = "Vulkan Test";
+		appInfo.pApplicationName = "Visibility Buffer Tessellation";
 		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 		appInfo.pEngineName = "No Engine";
 		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -82,13 +83,13 @@ namespace vbt
 	
 		// Get extensions
 		auto extensions = GetRequiredExtensions();
-		createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+		createInfo.enabledExtensionCount = SCAST_U32(extensions.size());
 		createInfo.ppEnabledExtensionNames = extensions.data();
 	
 		// Specify validation layers to enable
 		if (enableValidationLayers)
 		{
-			createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+			createInfo.enabledLayerCount = SCAST_U32(validationLayers.size());
 			createInfo.ppEnabledLayerNames = validationLayers.data();
 		}
 		else
@@ -153,7 +154,7 @@ bool VulkanCore::CheckForRequiredGlfwExtensions(const char** glfwExtensions, uin
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
 
 	// For each required extensions
-	for (int i = 0; i < glfwExtensionCount; i++)
+	for (uint32_t i = 0; i < glfwExtensionCount; i++)
 	{
 		bool requiredExtensionFound = false;
 
@@ -175,126 +176,12 @@ bool VulkanCore::CheckForRequiredGlfwExtensions(const char** glfwExtensions, uin
 
 	return true;
 }
-
-bool VulkanCore::CheckDeviceExtensionSupport(VkPhysicalDevice device)
-{
-	// Get all supported device extensions
-	uint32_t supportedExtensionCount = 0;
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &supportedExtensionCount, nullptr);
-	std::vector<VkExtensionProperties> supportedExtensions(supportedExtensionCount);
-	vkEnumerateDeviceExtensionProperties(device, nullptr, &supportedExtensionCount, supportedExtensions.data());
-
-	// Check for the ones we want
-	std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
-	for (const auto& extension : supportedExtensions)
-	{
-		// If the supported extension name is found in the required set, erase it
-		requiredExtensions.erase(extension.extensionName);
-	}
-
-	// If requiredExtensions is empty then all of them are supported
-	return requiredExtensions.empty();
-}
 #pragma endregion
 
 #pragma region Device Functions
-void VulkanCore::SelectPhysicalDevice()
-{
-	// How many devices are discoverable?
-	uint32_t deviceCount = 0;
-	vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
-	if (deviceCount == 0)
-	{
-		// Uh oh
-		throw std::runtime_error("Failed to find GPUs with Vulkan Support");
-	}
-
-	// Get available devices
-	std::vector<VkPhysicalDevice> devices(deviceCount);
-	vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
-
-	// Are any of the devices suitable for our needs?
-	for (const auto& device : devices) {
-		if (isDeviceSuitable(device)) {
-			physicalDevice = device;
-			break;
-		}
-	}
-	if (physicalDevice == VK_NULL_HANDLE) {
-		throw std::runtime_error("Failed to find a suitable GPU");
-	}
-}
-
-bool VulkanCore::isDeviceSuitable(VkPhysicalDevice device)
-{
-	// Get properties and features of graphics device
-	VkPhysicalDeviceProperties deviceProperties;
-	vkGetPhysicalDeviceProperties(device, &deviceProperties);
-	// Check for device features
-	VkPhysicalDeviceFeatures supportedFeatures;
-	vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
-
-	// We only want dedicated graphics cards
-	bool discrete = (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
-
-	// Check for required queue families
-	QueueFamilyIndices indices = FindQueueFamilies(device);
-	// Check for extension support
-	bool extensionsSupported = CheckDeviceExtensionSupport(device);
-	// Check for an adequate swap chain support
-	bool swapChainAdequate = false;
-	if (extensionsSupported)
-	{
-		SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
-		swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
-	}
-
-	return indices.isSuitable() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && discrete && supportedFeatures.geometryShader && supportedFeatures.fragmentStoresAndAtomics;
-}
-
-QueueFamilyIndices VulkanCore::FindQueueFamilies(VkPhysicalDevice device)
-{
-	QueueFamilyIndices indices;
-
-	// Get supported queue families from physical device
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-	std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilyProperties.data());
-
-	// Check each family for required support. Note: it's likely that graphics and presentation are supported
-	// by the same queue family for most graphics devices. But just in case, check for each as seperate families.
-	// Could add some logic to prefer a device that supports both in one family for better performance.
-	int i = 0;
-	for (const auto& queueFamily : queueFamilyProperties)
-	{
-		// Check for graphics support
-		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-		{
-			indices.graphicsFamily = i;
-		}
-		// Check for presentation support 
-		VkBool32 presentSupport = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-		if (queueFamilyCount > 0 && presentSupport)
-		{
-			indices.presentationFamily = i;
-		}
-
-		if (indices.isSuitable())
-		{
-			break;
-		}
-
-		i++;
-	}
-
-	return indices;
-}
-
 void VulkanCore::CreateLogicalDevice()
 {
-	QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
+	QueueFamilyIndices indices = PhysicalDevice::FindQueueFamilies(physicalDevice.Device(), surface);
 
 	// Create a DeviceQueueCreateInfo for each required queue family
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -321,29 +208,29 @@ void VulkanCore::CreateLogicalDevice()
 	// Create the logical device
 	VkDeviceCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+	createInfo.queueCreateInfoCount = SCAST_U32(queueCreateInfos.size());
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.pEnabledFeatures = &deviceFeatures;
-	createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+	createInfo.enabledExtensionCount = SCAST_U32(deviceExtensions.size());
 	createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
 	if (enableValidationLayers)
 	{
-		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+		createInfo.enabledLayerCount = SCAST_U32(validationLayers.size());
 		createInfo.ppEnabledLayerNames = validationLayers.data();
 	}
 	else
 		createInfo.enabledLayerCount = 0;
 
 	// Create the logical device
-	if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS)
+	if (vkCreateDevice(physicalDevice.Device(), &createInfo, nullptr, &device) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create logical device");
 	}
 
 	// Retrieve queue handles
-	vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &queues.graphics);
-	vkGetDeviceQueue(device, indices.presentationFamily.value(), 0, &queues.present);
+	vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &physicalDevice.Queues()->graphics);
+	vkGetDeviceQueue(device, indices.presentationFamily.value(), 0, &physicalDevice.Queues()->present);
 }
 #pragma endregion
 
@@ -360,7 +247,7 @@ void VulkanCore::CreateSurface(GLFWwindow* window)
 
 void VulkanCore::CreateSwapChain(GLFWwindow* window)
 {
-	SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(physicalDevice);
+	SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(physicalDevice.Device());
 
 	// Choose optimal settings from supported details
 	VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats);
@@ -385,7 +272,7 @@ void VulkanCore::CreateSwapChain(GLFWwindow* window)
 	createInfo.imageArrayLayers = 1;
 	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	// Define how swap images are shared between queue families
-	QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
+	QueueFamilyIndices indices = PhysicalDevice::FindQueueFamilies(physicalDevice.Device(), surface);
 	uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentationFamily.value() };
 	if (indices.graphicsFamily != indices.presentationFamily)
 	{
@@ -567,8 +454,8 @@ VkExtent2D VulkanCore::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabili
 		glfwGetFramebufferSize(window, &width, &height);
 
 		VkExtent2D actualExtent = {
-			static_cast<uint32_t>(width),
-			static_cast<uint32_t>(height)
+			SCAST_U32(width),
+			SCAST_U32(height)
 		};
 
 		actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);

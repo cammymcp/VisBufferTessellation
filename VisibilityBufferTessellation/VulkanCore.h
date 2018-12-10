@@ -4,12 +4,11 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include <vulkan\vulkan.h>
-#include <functional>
-#include <set>
-#include <optional>
 #include <algorithm>
 #include <iostream>
+
+#include "VBTTypes.h"
+#include "PhysicalDevice.h"
 
 #pragma region Constants
 const int MAX_FRAMES_IN_FLIGHT = 1; 
@@ -29,58 +28,21 @@ const bool enableValidationLayers = true;
 #endif
 #pragma endregion
 
-#pragma region Required Extensions
-const std::vector<const char*> deviceExtensions
-{
-	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-	"VK_KHR_shader_draw_parameters"/*,
-	"VK_NV_fragment_shader_barycentric" // nVidia extension for accessing barycentric coords in the fragment shader */
-};
-#pragma endregion
-
-#pragma region Device Queues
-struct DeviceQueues
-{
-	VkQueue graphics;
-	VkQueue present;
-};
-
-struct QueueFamilyIndices
-{
-	std::optional<uint32_t> graphicsFamily;
-	std::optional<uint32_t> presentationFamily;
-
-	bool isSuitable()
-	{
-		return graphicsFamily.has_value() && presentationFamily.has_value();
-	}
-};
-#pragma endregion
-
-#pragma region Swap Chain Support
-struct SwapChainSupportDetails
-{
-	VkSurfaceCapabilitiesKHR capabilities;
-	std::vector<VkSurfaceFormatKHR> formats;
-	std::vector<VkPresentModeKHR> presentModes;
-};
-#pragma endregion
-
 namespace vbt
 {
 	class VulkanCore
 	{
 	public:
+
 		// Interface Functions
 		void Init(GLFWwindow* window);
 		void CleanUp(); 
 		void RecreateSwapChain(GLFWwindow* window);
 		static VkImageView CreateImageView(const VkDevice &device, VkImage &image, VkFormat format, VkImageAspectFlags aspectFlags);
-		QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 
 		// Getters
 		VkInstance Instance() const { return instance; }
-		VkPhysicalDevice PhysicalDevice() const { return physicalDevice; }
+		PhysicalDevice PhysDevice() const { return physicalDevice; }
 		VkDevice Device() const { return device; }
 		VkSurfaceKHR Surface() const { return surface; }
 		VkSwapchainKHR SwapChain() const { return swapChain; }
@@ -88,7 +50,6 @@ namespace vbt
 		std::vector<VkImageView> SwapChainImageViews() const { return swapChainImageViews; }
 		VkExtent2D SwapChainExtent() const { return swapChainExtent; }
 		VkFormat SwapChainImageFormat() const { return swapChainImageFormat; }
-		DeviceQueues Queues() const { return queues; }
 		std::vector<VkSemaphore> ImageAvailableSemaphores() const { return imageAvailableSemaphores; }
 		std::vector<VkSemaphore> RenderFinishedSemaphores() const { return renderFinishedSemaphores; }
 		std::vector<VkFence> Fences() const { return inFlightFences; }
@@ -107,11 +68,8 @@ namespace vbt
 		bool CheckValidationLayerSupport();
 		std::vector<const char*> GetRequiredExtensions();
 		bool CheckForRequiredGlfwExtensions(const char** glfwExtensions, uint32_t glfwExtensionCount);
-		bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
 		// Device Functions
-		void SelectPhysicalDevice();
-		bool isDeviceSuitable(VkPhysicalDevice device);
 		void CreateLogicalDevice();
 
 		// Presentation/Swapchain Functions
@@ -127,9 +85,8 @@ namespace vbt
 		// Core handles
 		VkInstance instance;
 		VkDebugUtilsMessengerEXT callback;
-		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+		PhysicalDevice physicalDevice;
 		VkDevice device;
-		DeviceQueues queues;
 		VkSurfaceKHR surface; // Interface into window system 
 		VkSwapchainKHR swapChain;
 		VkFormat swapChainImageFormat;

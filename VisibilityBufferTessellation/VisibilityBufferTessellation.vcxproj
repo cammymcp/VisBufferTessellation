@@ -160,10 +160,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="PhysicalDevice.cpp" />
     <ClCompile Include="VulkanApplication.cpp" />
     <ClCompile Include="VulkanCore.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="HelperFunctions.h" />
+    <ClInclude Include="PhysicalDevice.h" />
+    <ClInclude Include="VBTTypes.h" />
     <ClInclude Include="vk_mem_alloc.h" />
     <ClInclude Include="VulkanApplication.h" />
     <ClInclude Include="VulkanCore.h" />

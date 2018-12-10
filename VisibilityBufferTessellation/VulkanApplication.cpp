@@ -5,6 +5,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 #include "VulkanApplication.h"
+#include "HelperFunctions.h"
 
 namespace vbt { 
 
@@ -157,7 +158,7 @@ void VulkanApplication::CleanUpSwapChain()
 	vkDestroyFramebuffer(vulkan->Device(), visibilityBuffer.frameBuffer, nullptr);
 
 	// Free command buffers
-	vkFreeCommandBuffers(vulkan->Device(), commandPool, static_cast<uint32_t>(visBuffShadeCommandBuffers.size()), visBuffShadeCommandBuffers.data());
+	vkFreeCommandBuffers(vulkan->Device(), commandPool, SCAST_U32(visBuffShadeCommandBuffers.size()), visBuffShadeCommandBuffers.data());
 	vkFreeCommandBuffers(vulkan->Device(), commandPool, 1, &visBuffWriteCommandBuffer);
 	vkDestroyPipeline(vulkan->Device(), visBuffShadePipeline, nullptr);
 	vkDestroyPipeline(vulkan->Device(), visBuffWritePipeline, nullptr);
@@ -264,7 +265,7 @@ void VulkanApplication::CreateVisBuffShadePipeline()
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
-	colourBlending.attachmentCount = static_cast<uint32_t>(blendAttachments.size());
+	colourBlending.attachmentCount = SCAST_U32(blendAttachments.size());
 	colourBlending.pAttachments = blendAttachments.data();
 
 	// Dynamic State
@@ -272,7 +273,7 @@ void VulkanApplication::CreateVisBuffShadePipeline()
 	VkPipelineDynamicStateCreateInfo dynamicState = {};
 	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 	dynamicState.pDynamicStates = dynamicStateEnables.data();
-	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
+	dynamicState.dynamicStateCount = SCAST_U32(dynamicStateEnables.size());
 	dynamicState.flags = 0;
 
 	// PipelineLayout
@@ -341,7 +342,7 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.vertexAttributeDescriptionCount = SCAST_U32(attributeDescriptions.size());
 	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
@@ -404,7 +405,7 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
-	colourBlending.attachmentCount = static_cast<uint32_t>(blendAttachments.size());
+	colourBlending.attachmentCount = SCAST_U32(blendAttachments.size());
 	colourBlending.pAttachments = blendAttachments.data();
 
 	// Dynamic State
@@ -412,7 +413,7 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	VkPipelineDynamicStateCreateInfo dynamicState = {};
 	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 	dynamicState.pDynamicStates = dynamicStateEnables.data();
-	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
+	dynamicState.dynamicStateCount = SCAST_U32(dynamicStateEnables.size());
 	dynamicState.flags = 0;
 
 	// PipelineLayout
@@ -524,7 +525,7 @@ void VulkanApplication::CreateVisBuffWriteRenderPass()
 	// Create subpass (one for now)
 	VkSubpassDescription subpass = {};
 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // Specify that this is a graphics subpass, not compute
-	subpass.colorAttachmentCount = static_cast<uint32_t>(colorReferences.size());;
+	subpass.colorAttachmentCount = SCAST_U32(colorReferences.size());;
 	subpass.pColorAttachments = colorReferences.data(); // Important: The attachment's index in this array is what is referenced in the out variable of the shader!
 	subpass.pDepthStencilAttachment = &depthReference;
 
@@ -548,7 +549,7 @@ void VulkanApplication::CreateVisBuffWriteRenderPass()
 	// Create the render pass with required attachments
 	VkRenderPassCreateInfo renderPassInfo = {};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+	renderPassInfo.attachmentCount = SCAST_U32(attachments.size());
 	renderPassInfo.pAttachments = attachments.data();
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpass;
@@ -610,7 +611,7 @@ void VulkanApplication::CreateVisBuffShadeRenderPass()
 
 	VkSubpassDescription subpassDescription = {};
 	subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpassDescription.colorAttachmentCount = static_cast<uint32_t>(colourReferences.size());
+	subpassDescription.colorAttachmentCount = SCAST_U32(colourReferences.size());
 	subpassDescription.pColorAttachments = colourReferences.data();
 	subpassDescription.pDepthStencilAttachment = &depthReference;
 	subpassDescription.inputAttachmentCount = 0; /*3;*/
@@ -640,11 +641,11 @@ void VulkanApplication::CreateVisBuffShadeRenderPass()
 
 	VkRenderPassCreateInfo renderPassInfo = {};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+	renderPassInfo.attachmentCount = SCAST_U32(attachments.size());
 	renderPassInfo.pAttachments = attachments.data();
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpassDescription;
-	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+	renderPassInfo.dependencyCount = SCAST_U32(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
 
 	// Create vis buff shade render pass
@@ -683,7 +684,7 @@ void VulkanApplication::CreateFrameBuffers()
 	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	framebufferInfo.pNext = NULL;
 	framebufferInfo.renderPass = visBuffWriteRenderPass; // Tell frame buffer which render pass it should be compatible with
-	framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+	framebufferInfo.attachmentCount = SCAST_U32(attachments.size());
 	framebufferInfo.pAttachments = attachments.data();
 	framebufferInfo.width = vulkan->SwapChainExtent().width;
 	framebufferInfo.height = vulkan->SwapChainExtent().height;
@@ -709,7 +710,7 @@ void VulkanApplication::CreateFrameBuffers()
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferInfo.pNext = NULL;
 		framebufferInfo.renderPass = visBuffShadeRenderPass; // Tell frame buffer which render pass it should be compatible with
-		framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+		framebufferInfo.attachmentCount = SCAST_U32(attachments.size());
 		framebufferInfo.pAttachments = attachments.data();
 		framebufferInfo.width = vulkan->SwapChainExtent().width;
 		framebufferInfo.height = vulkan->SwapChainExtent().height;
@@ -783,7 +784,7 @@ void VulkanApplication::DrawFrame()
 	// Submit to queue
 	submitInfo.pCommandBuffers = &visBuffWriteCommandBuffer;
 	submitInfo.commandBufferCount = 1;
-	if (vkQueueSubmit(vulkan->Queues().graphics, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+	if (vkQueueSubmit(vulkan->PhysDevice().Queues()->graphics, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to submit visBuffWrite command buffer");
 	}
@@ -797,7 +798,7 @@ void VulkanApplication::DrawFrame()
 
 	// Submit to queue
 	submitInfo.pCommandBuffers = &visBuffShadeCommandBuffers[imageIndex];
-	if (vkQueueSubmit(vulkan->Queues().graphics, 1, &submitInfo, vulkan->Fences()[currentFrame]) != VK_SUCCESS)
+	if (vkQueueSubmit(vulkan->PhysDevice().Queues()->graphics, 1, &submitInfo, vulkan->Fences()[currentFrame]) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to submit visBuffShade command buffer");
 	}
@@ -816,7 +817,7 @@ void VulkanApplication::DrawFrame()
 	presentInfo.pImageIndices = &imageIndex;
 
 	// Request to present image to the swap chain
-	result = vkQueuePresentKHR(vulkan->Queues().present, &presentInfo);
+	result = vkQueuePresentKHR(vulkan->PhysDevice().Queues()->present, &presentInfo);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
 	{
 		framebufferResized = false;
@@ -837,7 +838,7 @@ void VulkanApplication::DrawFrame()
 // Command pools manage the memory that is used to store the command buffers.
 void VulkanApplication::CreateCommandPool()
 {
-	QueueFamilyIndices queueFamilyIndices = vulkan->FindQueueFamilies(vulkan->PhysicalDevice());
+	QueueFamilyIndices queueFamilyIndices = PhysicalDevice::FindQueueFamilies(vulkan->PhysDevice().Device(), vulkan->Surface());
 
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -858,7 +859,7 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = commandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = static_cast<uint32_t>(visBuffShadeCommandBuffers.size());
+	allocInfo.commandBufferCount = SCAST_U32(visBuffShadeCommandBuffers.size());
 
 	if (vkAllocateCommandBuffers(vulkan->Device(), &allocInfo, visBuffShadeCommandBuffers.data()) != VK_SUCCESS)
 	{
@@ -891,7 +892,7 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 		renderPassInfo.framebuffer = swapChainFramebuffers[i];
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = vulkan->SwapChainExtent();
-		renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());;
+		renderPassInfo.clearValueCount = SCAST_U32(clearValues.size());;
 		renderPassInfo.pClearValues = clearValues.data();
 
 		// The first parameter for every command is always the command buffer to record the command to.
@@ -966,7 +967,7 @@ void VulkanApplication::RecordVisBuffWriteCommandBuffer()
 	renderPassInfo.renderPass = visBuffWriteRenderPass;
 	renderPassInfo.framebuffer = visibilityBuffer.frameBuffer;
 	renderPassInfo.renderArea.extent = vulkan->SwapChainExtent();
-	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+	renderPassInfo.clearValueCount = SCAST_U32(clearValues.size());
 	renderPassInfo.pClearValues = clearValues.data();
 
 	// Begin the render pass
@@ -997,7 +998,7 @@ void VulkanApplication::RecordVisBuffWriteCommandBuffer()
 	vkCmdBindIndexBuffer(visBuffWriteCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 	// Draw using index buffer
-	vkCmdDrawIndexed(visBuffWriteCommandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+	vkCmdDrawIndexed(visBuffWriteCommandBuffer, SCAST_U32(indices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(visBuffWriteCommandBuffer);
 
@@ -1039,8 +1040,8 @@ void VulkanApplication::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer;
 
-	vkQueueSubmit(vulkan->Queues().graphics, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(vulkan->Queues().graphics); // Maybe use a fence here if performing multiple transfers, allowing driver to optimise
+	vkQueueSubmit(vulkan->PhysDevice().Queues()->graphics, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(vulkan->PhysDevice().Queues()->graphics); // Maybe use a fence here if performing multiple transfers, allowing driver to optimise
 
 	vkFreeCommandBuffers(vulkan->Device(), commandPool, 1, &commandBuffer);
 }
@@ -1083,7 +1084,7 @@ VkFormat VulkanApplication::FindSupportedFormat(const std::vector<VkFormat>& can
 	for (VkFormat format : candidates)
 	{
 		VkFormatProperties props;
-		vkGetPhysicalDeviceFormatProperties(vulkan->PhysicalDevice(), format, &props);
+		vkGetPhysicalDeviceFormatProperties(vulkan->PhysDevice().Device(), format, &props);
 
 		if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features)
 		{
@@ -1251,7 +1252,7 @@ void VulkanApplication::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDev
 void VulkanApplication::CreateVmaAllocator()
 {
 	VmaAllocatorCreateInfo allocatorInfo = {};
-	allocatorInfo.physicalDevice = vulkan->PhysicalDevice();
+	allocatorInfo.physicalDevice = vulkan->PhysDevice().Device();
 	allocatorInfo.device = vulkan->Device();
 	vmaCreateAllocator(&allocatorInfo, &allocator);
 }
@@ -1277,7 +1278,7 @@ void VulkanApplication::CreateTextureImage()
 	// Copy the pixel values directly to the buffer
 	void* mappedData;
 	vmaMapMemory(allocator, stagingBufferMemory, &mappedData);
-	memcpy(mappedData, pixels, static_cast<uint32_t>(imageSize));
+	memcpy(mappedData, pixels, SCAST_U32(imageSize));
 	vmaUnmapMemory(allocator, stagingBufferMemory);
 
 	// Clean up pixel memory
@@ -1290,7 +1291,7 @@ void VulkanApplication::CreateTextureImage()
 	TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// Execute the copy from buffer to image
-	CopyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+	CopyBufferToImage(stagingBuffer, textureImage, SCAST_U32(texWidth), SCAST_U32(texHeight));
 
 	// Now transition the image layout again to allow for sampling in the shader
 	TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -1361,8 +1362,8 @@ void VulkanApplication::CreateImage(uint32_t width, uint32_t height, VkFormat fo
 	VkImageCreateInfo imageInfo = {};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = static_cast<uint32_t>(width);
-	imageInfo.extent.height = static_cast<uint32_t>(height);
+	imageInfo.extent.width = SCAST_U32(width);
+	imageInfo.extent.height = SCAST_U32(height);
 	imageInfo.extent.depth = 1;
 	imageInfo.mipLevels = 1;
 	imageInfo.arrayLayers = 1;
@@ -1538,7 +1539,7 @@ void VulkanApplication::LoadModel()
 			// Check if we've already seen this vertex before, and add it to the vertex buffer if not
 			if (uniqueVertices.count(vertex) == 0)
 			{
-				uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+				uniqueVertices[vertex] = SCAST_U32(vertices.size());
 				vertices.push_back(vertex);
 				vertexAttributeData.push_back(vertexAttributes);
 			}
@@ -1553,17 +1554,17 @@ void VulkanApplication::CreateDescriptorPool()
 {
 	std::array<VkDescriptorPoolSize, 3> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>((vulkan->SwapChainImages().size())) + 1; // Extra mvp ubo for the write pass
+	poolSizes[0].descriptorCount = SCAST_U32((vulkan->SwapChainImages().size())) + 1; // Extra mvp ubo for the write pass
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(vulkan->SwapChainImages().size()) * 2; // 2 sampled images per swapchain image
+	poolSizes[1].descriptorCount = SCAST_U32(vulkan->SwapChainImages().size()) * 2; // 2 sampled images per swapchain image
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	poolSizes[2].descriptorCount = (static_cast<uint32_t>(vulkan->SwapChainImages().size())) * 2; // 2 storage buffers per swapchain image
+	poolSizes[2].descriptorCount = (SCAST_U32(vulkan->SwapChainImages().size())) * 2; // 2 storage buffers per swapchain image
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolInfo.poolSizeCount = SCAST_U32(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
-	poolInfo.maxSets = static_cast<uint32_t>(vulkan->SwapChainImages().size()) + 1; // 1 descriptor set per swapchain image and one for the write pass
+	poolInfo.maxSets = SCAST_U32(vulkan->SwapChainImages().size()) + 1; // 1 descriptor set per swapchain image and one for the write pass
 
 	if (vkCreateDescriptorPool(vulkan->Device(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
 	{
@@ -1613,7 +1614,7 @@ void VulkanApplication::CreateShadePassDescriptorSetLayout()
 	std::array<VkDescriptorSetLayoutBinding, 5> bindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding };
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.bindingCount = SCAST_U32(bindings.size());
 	layoutInfo.pBindings = bindings.data();
 
 	if (vkCreateDescriptorSetLayout(vulkan->Device(), &layoutInfo, nullptr, &shadePassDescriptorSetLayout) != VK_SUCCESS)
@@ -1636,7 +1637,7 @@ void VulkanApplication::CreateWritePassDescriptorSetLayout()
 	std::array<VkDescriptorSetLayoutBinding, 1> bindings = { modelUboLayoutBinding };
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.bindingCount = SCAST_U32(bindings.size());
 	layoutInfo.pBindings = bindings.data();
 
 	if (vkCreateDescriptorSetLayout(vulkan->Device(), &layoutInfo, nullptr, &writePassDescriptorSetLayout) != VK_SUCCESS)
@@ -1655,7 +1656,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 	VkDescriptorSetAllocateInfo shadePassAllocInfo = {};
 	shadePassAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	shadePassAllocInfo.descriptorPool = descriptorPool;
-	shadePassAllocInfo.descriptorSetCount = static_cast<uint32_t>(vulkan->SwapChainImages().size());
+	shadePassAllocInfo.descriptorSetCount = SCAST_U32(vulkan->SwapChainImages().size());
 	shadePassAllocInfo.pSetLayouts = shadingLayouts.data();
 
 	shadePassDescriptorSets.resize(vulkan->SwapChainImages().size());
@@ -1745,7 +1746,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		shadePassDescriptorWrites[4].descriptorCount = 1;
 		shadePassDescriptorWrites[4].pBufferInfo = &attributeBufferInfo;
 
-		vkUpdateDescriptorSets(vulkan->Device(), static_cast<uint32_t>(shadePassDescriptorWrites.size()), shadePassDescriptorWrites.data(), 0, nullptr);
+		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(shadePassDescriptorWrites.size()), shadePassDescriptorWrites.data(), 0, nullptr);
 	}
 }
 
@@ -1785,7 +1786,7 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 	writePassDescriptorWrites[0].descriptorCount = 1;
 	writePassDescriptorWrites[0].pBufferInfo = &mvpUBOInfo;
 
-	vkUpdateDescriptorSets(vulkan->Device(), static_cast<uint32_t>(writePassDescriptorWrites.size()), writePassDescriptorWrites.data(), 0, nullptr);
+	vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(writePassDescriptorWrites.size()), writePassDescriptorWrites.data(), 0, nullptr);
 }
 #pragma endregion
 
