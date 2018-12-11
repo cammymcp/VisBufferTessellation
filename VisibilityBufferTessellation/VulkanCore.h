@@ -4,17 +4,16 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include <algorithm>
 #include <iostream>
 
 #include "VBTTypes.h"
-#include "PhysicalDevice.h"
+#include "SwapChain.h"
 
 #pragma region Constants
 const int MAX_FRAMES_IN_FLIGHT = 1; 
 #pragma endregion
 
-#pragma region Required Validation Layers
+#pragma region Validation Layers
 const std::vector<const char*> validationLayers =
 {
 	"VK_LAYER_LUNARG_standard_validation",
@@ -33,30 +32,23 @@ namespace vbt
 	class VulkanCore
 	{
 	public:
-
 		// Interface Functions
 		void Init(GLFWwindow* window);
 		void CleanUp(); 
-		void RecreateSwapChain(GLFWwindow* window);
-		static VkImageView CreateImageView(const VkDevice &device, VkImage &image, VkFormat format, VkImageAspectFlags aspectFlags);
 
 		// Getters
 		VkInstance Instance() const { return instance; }
 		PhysicalDevice PhysDevice() const { return physicalDevice; }
+		SwapChain Swapchain() const { return swapChain; }
 		VkDevice Device() const { return device; }
-		VkSurfaceKHR Surface() const { return surface; }
-		VkSwapchainKHR SwapChain() const { return swapChain; }
-		std::vector<VkImage> SwapChainImages() const { return swapChainImages; }
-		std::vector<VkImageView> SwapChainImageViews() const { return swapChainImageViews; }
-		VkExtent2D SwapChainExtent() const { return swapChainExtent; }
-		VkFormat SwapChainImageFormat() const { return swapChainImageFormat; }
 		std::vector<VkSemaphore> ImageAvailableSemaphores() const { return imageAvailableSemaphores; }
 		std::vector<VkSemaphore> RenderFinishedSemaphores() const { return renderFinishedSemaphores; }
 		std::vector<VkFence> Fences() const { return inFlightFences; }
 
 	private:
-		// Instance Functions
 		void CreateInstance();
+		void CreateLogicalDevice();
+		void CreateSynchronisationObjects();
 
 		// Debug Functions
 		void SetupDebugCallback();
@@ -66,38 +58,18 @@ namespace vbt
 
 		// Validation Layers and Extensions Functions
 		bool CheckValidationLayerSupport();
-		std::vector<const char*> GetRequiredExtensions();
+		std::vector<const char*> GetRequiredInstanceExtensions();
 		bool CheckForRequiredGlfwExtensions(const char** glfwExtensions, uint32_t glfwExtensionCount);
-
-		// Device Functions
-		void CreateLogicalDevice();
-
-		// Presentation/Swapchain Functions
-		void CreateSurface(GLFWwindow* window);
-		void CreateSwapChain(GLFWwindow* window);
-		void CreateSwapChainImageViews();
-		void CreateSynchronisationObjects();
-		SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
-		VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
-		VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR> availablePresentModes);
-		VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
 
 		// Core handles
 		VkInstance instance;
 		VkDebugUtilsMessengerEXT callback;
+		SwapChain swapChain;
 		PhysicalDevice physicalDevice;
 		VkDevice device;
-		VkSurfaceKHR surface; // Interface into window system 
-		VkSwapchainKHR swapChain;
-		VkFormat swapChainImageFormat;
-		VkExtent2D swapChainExtent; 
 		std::vector<VkSemaphore> imageAvailableSemaphores;
 		std::vector<VkSemaphore> renderFinishedSemaphores;
 		std::vector<VkFence> inFlightFences; // Sync objects to prevent CPU submitting too many frames at once
-
-		// Core containers
-		std::vector<VkImage> swapChainImages;
-		std::vector<VkImageView> swapChainImageViews;
 	};  
 } 
 

@@ -23,7 +23,7 @@ namespace vbt
 		void Init(VkInstance instance, VkSurfaceKHR surface);
 		static QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);
 
-		VkPhysicalDevice Device() const { return physicalDevice; }
+		VkPhysicalDevice VkHandle() const { return physicalDevice; }
 		DeviceQueues* Queues() { return &queues; }
 		const std::vector<const char*> Extensions() { return deviceExtensions; }
 

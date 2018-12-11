@@ -216,7 +216,7 @@ namespace vbt
 		// Handles and Containers
 #pragma region Core Objects
 		GLFWwindow* window;
-		vbt::VulkanCore* vulkan;
+		VulkanCore* vulkan;
 #pragma endregion
 
 #pragma region Graphics Pipeline Objects
