@@ -159,6 +159,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Buffer.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PhysicalDevice.cpp" />
     <ClCompile Include="SwapChain.cpp" />
@@ -166,6 +167,7 @@
     <ClCompile Include="VulkanCore.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Buffer.h" />
     <ClInclude Include="HelperFunctions.h" />
     <ClInclude Include="PhysicalDevice.h" />
     <ClInclude Include="SwapChain.h" />

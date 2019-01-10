@@ -7,6 +7,7 @@
 #include <chrono>
 #include "vk_mem_alloc.h"
 #include "VulkanCore.h"
+#include "Buffer.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // Ensure that GLM works in Vulkan's clip coordinates of 0.0 to 1.0
@@ -45,7 +46,7 @@ struct Vertex
 {
 	glm::vec3 pos;
 	glm::vec3 colour;
-	glm::vec2 texCoord;
+	glm::vec2 uv;
 
 	static VkVertexInputBindingDescription GetBindingDescription()
 	{
@@ -73,14 +74,14 @@ struct Vertex
 		attributeDescriptions[2].binding = 0;
 		attributeDescriptions[2].location = 2;
 		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+		attributeDescriptions[2].offset = offsetof(Vertex, uv);
 
 		return attributeDescriptions;
 	}
 
 	bool operator==(const Vertex& other) const
 	{
-		return pos == other.pos && colour == other.colour && texCoord == other.texCoord;
+		return pos == other.pos && colour == other.colour && uv == other.uv;
 	}
 };
 
@@ -93,7 +94,7 @@ namespace std
 		{
 			return ((hash<glm::vec3>()(vertex.pos) ^
 				(hash<glm::vec3>()(vertex.colour) << 1)) >> 1) ^
-				(hash<glm::vec2>()(vertex.texCoord) << 1);
+				(hash<glm::vec2>()(vertex.uv) << 1);
 		}
 	};
 }
@@ -251,14 +252,10 @@ namespace vbt
 
 #pragma region Buffer Objects
 		VmaAllocator allocator;
-		VkBuffer vertexBuffer;
-		VkBuffer indexBuffer;
-		VkBuffer vertexAttributeBuffer;
-		VmaAllocation indexBufferAllocation;
-		VmaAllocation vertexBufferAllocation;
-		VmaAllocation vertexAttributeBufferAllocation;
-		VkBuffer mvpUniformBuffer;
-		VmaAllocation mvpUniformBufferAllocation;
+		Buffer vertexBuffer;
+		Buffer indexBuffer;
+		Buffer vertexAttributeBuffer;
+		Buffer mvpUniformBuffer;
 #pragma endregion
 
 #pragma region Texture Objects 

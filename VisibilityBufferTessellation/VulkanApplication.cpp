@@ -88,12 +88,12 @@ void VulkanApplication::CleanUp()
 	vkDestroyDescriptorSetLayout(vulkan->Device(), writePassDescriptorSetLayout, nullptr);
 
 	// Destroy uniform buffers
-	vmaDestroyBuffer(allocator, mvpUniformBuffer, mvpUniformBufferAllocation);
+	mvpUniformBuffer.CleanUp(allocator);
 
 	// Destroy vertex and index buffers
-	vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferAllocation);
-	vmaDestroyBuffer(allocator, indexBuffer, indexBufferAllocation);
-	vmaDestroyBuffer(allocator, vertexAttributeBuffer, vertexAttributeBufferAllocation);
+	vertexBuffer.CleanUp(allocator);
+	indexBuffer.CleanUp(allocator);
+	vertexAttributeBuffer.CleanUp(allocator);
 	vmaDestroyAllocator(allocator);
 
 	// Destroy geometry pass semaphore
@@ -993,9 +993,9 @@ void VulkanApplication::RecordVisBuffWriteCommandBuffer()
 
 	// Bind geometry buffers
 	VkDeviceSize offsets[1] = { 0 };
-	VkBuffer vertexBuffers[] = { vertexBuffer };
+	VkBuffer vertexBuffers[] = { vertexBuffer.VkHandle() };
 	vkCmdBindVertexBuffers(visBuffWriteCommandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindIndexBuffer(visBuffWriteCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindIndexBuffer(visBuffWriteCommandBuffer, indexBuffer.VkHandle(), 0, VK_INDEX_TYPE_UINT32);
 
 	// Draw using index buffer
 	vkCmdDrawIndexed(visBuffWriteCommandBuffer, SCAST_U32(indices.size()), 1, 0, 0, 0);
@@ -1129,77 +1129,59 @@ void VulkanApplication::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage
 
 void VulkanApplication::CreateVertexBuffer()
 {
-	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-
 	// Create staging buffer on host memory
-	VkBuffer stagingBuffer;
-	VmaAllocation stagingBufferAllocation;
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferAllocation);
+	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+	Buffer stagingBuffer;
+	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
 	// Map vertex data to staging buffer memory allocation
-	void* mappedData;
-	vmaMapMemory(allocator, stagingBufferAllocation, &mappedData);
-	memcpy(mappedData, vertices.data(), (size_t)bufferSize);
-	vmaUnmapMemory(allocator, stagingBufferAllocation);
+	stagingBuffer.MapData(vertices.data(), allocator);
 
 	// Create vertex buffer on device local memory
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferAllocation);
+	vertexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
 
 	// Copy data to new vertex buffer
-	CopyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+	CopyBuffer(stagingBuffer.VkHandle(), vertexBuffer.VkHandle(), bufferSize);
 
-	// Clean up staging buffer
-	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAllocation);
+	stagingBuffer.CleanUp(allocator);
 }
 
 void VulkanApplication::CreateAttributeBuffer()
 {
-	VkDeviceSize bufferSize = sizeof(vertexAttributeData[0]) * vertexAttributeData.size();
-
 	// Create staging buffer on host memory
-	VkBuffer stagingBuffer;
-	VmaAllocation stagingBufferAllocation;
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferAllocation);
+	VkDeviceSize bufferSize = sizeof(vertexAttributeData[0]) * vertexAttributeData.size();
+	Buffer stagingBuffer;
+	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
-	// Map vertex data to staging buffer memory allocation
-	void* mappedData;
-	vmaMapMemory(allocator, stagingBufferAllocation, &mappedData);
-	memcpy(mappedData, vertexAttributeData.data(), (size_t)bufferSize);
-	vmaUnmapMemory(allocator, stagingBufferAllocation);
+	// Map attribute data to staging buffer memory allocation
+	stagingBuffer.MapData(vertexAttributeData.data(), allocator);
 
-	// Create vertex buffer on device local memory
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexAttributeBuffer, vertexAttributeBufferAllocation);
+	// Create attribute buffer on device local memory
+	vertexAttributeBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
 
-	// Copy data to new vertex buffer
-	CopyBuffer(stagingBuffer, vertexAttributeBuffer, bufferSize);
+	// Copy data to new attribute buffer
+	CopyBuffer(stagingBuffer.VkHandle(), vertexAttributeBuffer.VkHandle(), bufferSize);
 
-	// Clean up staging buffer
-	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAllocation);
+	stagingBuffer.CleanUp(allocator);
 }
 
 void VulkanApplication::CreateIndexBuffer()
 {
-	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
 	// Create staging buffer on host memory
-	VkBuffer stagingBuffer;
-	VmaAllocation stagingBufferAllocation;
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferAllocation);
+	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+	Buffer stagingBuffer;
+	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
-	// Map vertex data to staging buffer memory allocation
-	void* mappedData;
-	vmaMapMemory(allocator, stagingBufferAllocation, &mappedData);
-	memcpy(mappedData, indices.data(), (size_t)bufferSize);
-	vmaUnmapMemory(allocator, stagingBufferAllocation);
+	// Map index data to staging buffer memory allocation
+	stagingBuffer.MapData(indices.data(), allocator);
 
-	// Create vertex buffer on device local memory
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferAllocation);
+	// Create index buffer on device local memory
+	indexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
 
-	// Copy data to new vertex buffer
-	CopyBuffer(stagingBuffer, indexBuffer, bufferSize);
+	// Copy data to new index buffer
+	CopyBuffer(stagingBuffer.VkHandle(), indexBuffer.VkHandle(), bufferSize);
 
-	// Clean up staging buffer
-	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAllocation);
+	stagingBuffer.CleanUp(allocator);
 }
 
 void VulkanApplication::CreateUniformBuffers()
@@ -1207,7 +1189,7 @@ void VulkanApplication::CreateUniformBuffers()
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
 	// Create uniform buffer for shade Pass
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, mvpUniformBuffer, mvpUniformBufferAllocation);
+	mvpUniformBuffer.Create(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 }
 
 void VulkanApplication::UpdateMVPUniformBuffer()
@@ -1231,10 +1213,7 @@ void VulkanApplication::UpdateMVPUniformBuffer()
 	//ubo.invViewProj = inverseViewProj;
 
 	// Now map the memory to uniform buffer
-	void* mappedData;
-	vmaMapMemory(allocator, mvpUniformBufferAllocation, &mappedData);
-	memcpy(mappedData, &ubo, sizeof(ubo));
-	vmaUnmapMemory(allocator, mvpUniformBufferAllocation);
+	mvpUniformBuffer.MapData(&ubo, allocator);
 }
 
 void VulkanApplication::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
@@ -1528,13 +1507,13 @@ void VulkanApplication::LoadModel()
 			vertexAttributes.colYZtexXY.x = vertex.colour.y;
 			vertexAttributes.colYZtexXY.y = vertex.colour.z;
 
-			vertex.texCoord =
+			vertex.uv =
 			{
 				attribute.texcoords[2 * index.texcoord_index + 0],
 				1.0f - attribute.texcoords[2 * index.texcoord_index + 1] // Flip texture Y coordinate to match vulkan coord system
 			};
-			vertexAttributes.colYZtexXY.z = vertex.texCoord.x;
-			vertexAttributes.colYZtexXY.w = vertex.texCoord.y;
+			vertexAttributes.colYZtexXY.z = vertex.uv.x;
+			vertexAttributes.colYZtexXY.w = vertex.uv.y;
 
 			// Check if we've already seen this vertex before, and add it to the vertex buffer if not
 			if (uniqueVertices.count(vertex) == 0)
@@ -1681,22 +1660,13 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		visBufferInfo.sampler = textureSampler;
 
 		// Model UBO
-		VkDescriptorBufferInfo mvpUBOInfo = {};
-		mvpUBOInfo.buffer = mvpUniformBuffer;
-		mvpUBOInfo.offset = 0;
-		mvpUBOInfo.range = sizeof(UniformBufferObject);
+		mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
 
 		// Index Buffer
-		VkDescriptorBufferInfo indexBufferInfo = {};
-		indexBufferInfo.buffer = indexBuffer;
-		indexBufferInfo.offset = 0;
-		indexBufferInfo.range = sizeof(indices[0]) * indices.size();
+		indexBuffer.SetupDescriptor(sizeof(indices[0]) * indices.size(), 0);
 
 		// Vertex Attribute Buffer
-		VkDescriptorBufferInfo attributeBufferInfo = {};
-		attributeBufferInfo.buffer = vertexAttributeBuffer;
-		attributeBufferInfo.offset = 0;
-		attributeBufferInfo.range = sizeof(vertexAttributeData[0]) * vertexAttributeData.size();
+		vertexAttributeBuffer.SetupDescriptor(sizeof(vertexAttributeData[0]) * vertexAttributeData.size(), 0);
 
 		// Create a descriptor write for each descriptor in the set
 		std::array<VkWriteDescriptorSet, 5> shadePassDescriptorWrites = {};
@@ -1726,7 +1696,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		shadePassDescriptorWrites[2].dstArrayElement = 0;
 		shadePassDescriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		shadePassDescriptorWrites[2].descriptorCount = 1;
-		shadePassDescriptorWrites[2].pBufferInfo = &mvpUBOInfo;
+		shadePassDescriptorWrites[2].pBufferInfo = mvpUniformBuffer.DescriptorInfo();
 
 		// Binding 3: Index Buffer
 		shadePassDescriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1735,7 +1705,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		shadePassDescriptorWrites[3].dstArrayElement = 0;
 		shadePassDescriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 		shadePassDescriptorWrites[3].descriptorCount = 1;
-		shadePassDescriptorWrites[3].pBufferInfo = &indexBufferInfo;
+		shadePassDescriptorWrites[3].pBufferInfo = indexBuffer.DescriptorInfo();
 
 		// Binding 4: Vertex Attribute Buffer
 		shadePassDescriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1744,7 +1714,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		shadePassDescriptorWrites[4].dstArrayElement = 0;
 		shadePassDescriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 		shadePassDescriptorWrites[4].descriptorCount = 1;
-		shadePassDescriptorWrites[4].pBufferInfo = &attributeBufferInfo;
+		shadePassDescriptorWrites[4].pBufferInfo = vertexAttributeBuffer.DescriptorInfo();
 
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(shadePassDescriptorWrites.size()), shadePassDescriptorWrites.data(), 0, nullptr);
 	}
@@ -1769,10 +1739,7 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 	}
 
 	// Model UBO
-	VkDescriptorBufferInfo mvpUBOInfo = {};
-	mvpUBOInfo.buffer = mvpUniformBuffer;
-	mvpUBOInfo.offset = 0;
-	mvpUBOInfo.range = sizeof(UniformBufferObject);
+	mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
 
 	// Create a descriptor write for each descriptor in the set
 	std::array<VkWriteDescriptorSet, 1> writePassDescriptorWrites = {};
@@ -1784,7 +1751,7 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 	writePassDescriptorWrites[0].dstArrayElement = 0;
 	writePassDescriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	writePassDescriptorWrites[0].descriptorCount = 1;
-	writePassDescriptorWrites[0].pBufferInfo = &mvpUBOInfo;
+	writePassDescriptorWrites[0].pBufferInfo = mvpUniformBuffer.DescriptorInfo();
 
 	vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(writePassDescriptorWrites.size()), writePassDescriptorWrites.data(), 0, nullptr);
 }
