@@ -2,8 +2,6 @@
 #include "vk_mem_alloc.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
 #include "VulkanApplication.h"
 #include "HelperFunctions.h"
 
@@ -41,7 +39,7 @@ void VulkanApplication::Init()
 	CreateTextureImageView();
 	CreateTextureSampler();
 	CreateDepthSampler();
-	LoadModel();
+	chalet.LoadFromFile(MODEL_PATH);
 	CreateVertexBuffer();
 	CreateAttributeBuffer();
 	CreateIndexBuffer();
@@ -998,7 +996,7 @@ void VulkanApplication::RecordVisBuffWriteCommandBuffer()
 	vkCmdBindIndexBuffer(visBuffWriteCommandBuffer, indexBuffer.VkHandle(), 0, VK_INDEX_TYPE_UINT32);
 
 	// Draw using index buffer
-	vkCmdDrawIndexed(visBuffWriteCommandBuffer, SCAST_U32(indices.size()), 1, 0, 0, 0);
+	vkCmdDrawIndexed(visBuffWriteCommandBuffer, SCAST_U32(chalet.Indices().size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(visBuffWriteCommandBuffer);
 
@@ -1130,12 +1128,12 @@ void VulkanApplication::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage
 void VulkanApplication::CreateVertexBuffer()
 {
 	// Create staging buffer on host memory
-	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+	VkDeviceSize bufferSize = sizeof(chalet.Vertices()[0]) * chalet.Vertices().size();
 	Buffer stagingBuffer;
 	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
 	// Map vertex data to staging buffer memory allocation
-	stagingBuffer.MapData(vertices.data(), allocator);
+	stagingBuffer.MapData(chalet.Vertices().data(), allocator);
 
 	// Create vertex buffer on device local memory
 	vertexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
@@ -1149,12 +1147,12 @@ void VulkanApplication::CreateVertexBuffer()
 void VulkanApplication::CreateAttributeBuffer()
 {
 	// Create staging buffer on host memory
-	VkDeviceSize bufferSize = sizeof(vertexAttributeData[0]) * vertexAttributeData.size();
+	VkDeviceSize bufferSize = sizeof(chalet.PackedVertexAttributes()[0]) * chalet.PackedVertexAttributes().size();
 	Buffer stagingBuffer;
 	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
 	// Map attribute data to staging buffer memory allocation
-	stagingBuffer.MapData(vertexAttributeData.data(), allocator);
+	stagingBuffer.MapData(chalet.PackedVertexAttributes().data(), allocator);
 
 	// Create attribute buffer on device local memory
 	vertexAttributeBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
@@ -1168,12 +1166,12 @@ void VulkanApplication::CreateAttributeBuffer()
 void VulkanApplication::CreateIndexBuffer()
 {
 	// Create staging buffer on host memory
-	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+	VkDeviceSize bufferSize = sizeof(chalet.Indices()[0]) * chalet.Indices().size();
 	Buffer stagingBuffer;
 	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
 	// Map index data to staging buffer memory allocation
-	stagingBuffer.MapData(indices.data(), allocator);
+	stagingBuffer.MapData(chalet.Indices().data(), allocator);
 
 	// Create index buffer on device local memory
 	indexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
@@ -1466,68 +1464,6 @@ void VulkanApplication::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32
 }
 #pragma endregion
 
-#pragma region Model Functions
-void VulkanApplication::LoadModel()
-{
-	tinyobj::attrib_t attribute;
-	std::vector<tinyobj::shape_t> shapes;
-	std::vector<tinyobj::material_t> materials;
-	std::string err;
-
-	// LoadObj automatically triangulates faces by default, so we don't need to worry about that 
-	if (!tinyobj::LoadObj(&attribute, &shapes, &materials, &err, MODEL_PATH.c_str()))
-	{
-		throw std::runtime_error(err);
-	}
-
-	// Use a map to track the index of unique vertices
-	std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
-
-	// Combine all shapes into one model
-	for (const auto& shape : shapes)
-	{
-		for (const auto& index : shape.mesh.indices)
-		{
-			Vertex vertex = {};
-			VertexAttributes vertexAttributes = {}; // For storing geometry attributes only to be accessed by shading pass. Position, colour and tex are packed into 2 vec4s
-
-			// Vertices array is an array of floats, so we have to multiply the index by three each time, and offset by 0/1/2 to get the X/Y/Z components
-			vertex.pos =
-			{
-				attribute.vertices[3 * index.vertex_index + 0],
-				attribute.vertices[3 * index.vertex_index + 1],
-				attribute.vertices[3 * index.vertex_index + 2]
-			};
-			vertexAttributes.posXYZcolX.x = vertex.pos.x;
-			vertexAttributes.posXYZcolX.y = vertex.pos.y;
-			vertexAttributes.posXYZcolX.z = vertex.pos.z;
-
-			vertex.colour = { 1.0f, 1.0f, 1.0f };
-			vertexAttributes.posXYZcolX.w = vertex.colour.x;
-			vertexAttributes.colYZtexXY.x = vertex.colour.y;
-			vertexAttributes.colYZtexXY.y = vertex.colour.z;
-
-			vertex.uv =
-			{
-				attribute.texcoords[2 * index.texcoord_index + 0],
-				1.0f - attribute.texcoords[2 * index.texcoord_index + 1] // Flip texture Y coordinate to match vulkan coord system
-			};
-			vertexAttributes.colYZtexXY.z = vertex.uv.x;
-			vertexAttributes.colYZtexXY.w = vertex.uv.y;
-
-			// Check if we've already seen this vertex before, and add it to the vertex buffer if not
-			if (uniqueVertices.count(vertex) == 0)
-			{
-				uniqueVertices[vertex] = SCAST_U32(vertices.size());
-				vertices.push_back(vertex);
-				vertexAttributeData.push_back(vertexAttributes);
-			}
-			indices.push_back(uniqueVertices[vertex]);
-		}
-	}
-}
-#pragma endregion
-
 #pragma region Descriptor Functions
 void VulkanApplication::CreateDescriptorPool()
 {
@@ -1663,10 +1599,10 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
 
 		// Index Buffer
-		indexBuffer.SetupDescriptor(sizeof(indices[0]) * indices.size(), 0);
+		indexBuffer.SetupDescriptor(sizeof(chalet.Indices()[0]) * chalet.Indices().size(), 0);
 
 		// Vertex Attribute Buffer
-		vertexAttributeBuffer.SetupDescriptor(sizeof(vertexAttributeData[0]) * vertexAttributeData.size(), 0);
+		vertexAttributeBuffer.SetupDescriptor(sizeof(chalet.PackedVertexAttributes()[0]) * chalet.PackedVertexAttributes().size(), 0);
 
 		// Create a descriptor write for each descriptor in the set
 		std::array<VkWriteDescriptorSet, 5> shadePassDescriptorWrites = {};

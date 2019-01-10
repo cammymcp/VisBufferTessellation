@@ -161,6 +161,7 @@
   <ItemGroup>
     <ClCompile Include="Buffer.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="PhysicalDevice.cpp" />
     <ClCompile Include="SwapChain.cpp" />
     <ClCompile Include="VulkanApplication.cpp" />
@@ -169,6 +170,7 @@
   <ItemGroup>
     <ClInclude Include="Buffer.h" />
     <ClInclude Include="HelperFunctions.h" />
+    <ClInclude Include="Mesh.h" />
     <ClInclude Include="PhysicalDevice.h" />
     <ClInclude Include="SwapChain.h" />
     <ClInclude Include="VBTTypes.h" />
