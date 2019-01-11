@@ -9,6 +9,7 @@
 #include "VulkanCore.h"
 #include "Buffer.h"
 #include "Mesh.h"
+#include "Texture.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // Ensure that GLM works in Vulkan's clip coordinates of 0.0 to 1.0
@@ -187,18 +188,12 @@ namespace vbt
 #pragma endregion
 
 #pragma region Texture Objects 
-		VkImage textureImage;
-		VmaAllocation textureImageMemory;
-		VkImageView textureImageView;
-		VkSampler textureSampler;
+		Texture chaletTexture;
 		VkSampler depthSampler;
 #pragma endregion
 
 #pragma region Model Objects
 		Mesh chalet;
-		//std::vector<Vertex> vertices;
-		//std::vector<uint32_t> indices;
-		//std::vector<VertexAttributes> vertexAttributeData;
 #pragma endregion
 
 #pragma region Descriptor Objects

@@ -1,11 +1,14 @@
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
 #include "VulkanApplication.h"
 #include "HelperFunctions.h"
 
-namespace vbt { 
+namespace vbt {
+
+	bool HasStencilComponent(VkFormat format)
+	{
+		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+	}
 
 #pragma region Core Functions
 void VulkanApplication::InitWindow()
@@ -35,9 +38,7 @@ void VulkanApplication::Init()
 	CreatePipelineCache();
 	CreateVisBuffWritePipeline();
 	CreateVisBuffShadePipeline();
-	CreateTextureImage();
-	CreateTextureImageView();
-	CreateTextureSampler();
+	chaletTexture.Create(TEXTURE_PATH, allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 	CreateDepthSampler();
 	chalet.LoadFromFile(MODEL_PATH);
 	CreateVertexBuffer();
@@ -69,12 +70,10 @@ void VulkanApplication::CleanUp()
 	CleanUpSwapChain();
 
 	// Destroy texture objects
-	vkDestroySampler(vulkan->Device(), textureSampler, nullptr);
 	vkDestroySampler(vulkan->Device(), depthSampler, nullptr);
 	vkDestroyImageView(vulkan->Device(), visibilityBuffer.visibility.imageView, nullptr);
 	vmaDestroyImage(allocator, visibilityBuffer.visibility.image, visibilityBuffer.visibility.imageMemory);
-	vkDestroyImageView(vulkan->Device(), textureImageView, nullptr);
-	vmaDestroyImage(allocator, textureImage, textureImageMemory);
+	chaletTexture.CleanUp(allocator, vulkan->Device());
 	vkDestroyImageView(vulkan->Device(), debugAttachment.imageView, nullptr);
 	vmaDestroyImage(allocator, debugAttachment.image, debugAttachment.imageMemory);
 
@@ -1096,11 +1095,6 @@ VkFormat VulkanApplication::FindSupportedFormat(const std::vector<VkFormat>& can
 
 	throw std::runtime_error("failed to find supported format!");
 }
-
-bool HasStencilComponent(VkFormat format)
-{
-	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
-}
 #pragma endregion
 
 #pragma region Buffer Functions
@@ -1236,77 +1230,77 @@ void VulkanApplication::CreateVmaAllocator()
 #pragma endregion
 
 #pragma region Texture Functions
-void VulkanApplication::CreateTextureImage()
-{
-	// Load image file with STB library
-	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-	VkDeviceSize imageSize = texWidth * texHeight * 4;
-	if (!pixels)
-	{
-		throw std::runtime_error("Failed to load texture image");
-	}
+//void VulkanApplication::CreateTextureImage()
+//{
+//	// Load image file with STB library
+//	int texWidth, texHeight, texChannels;
+//	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+//	VkDeviceSize imageSize = texWidth * texHeight * 4;
+//	if (!pixels)
+//	{
+//		throw std::runtime_error("Failed to load texture image");
+//	}
+//
+//	// Create a staging buffer for the pixel data
+//	VkBuffer stagingBuffer;
+//	VmaAllocation stagingBufferMemory;
+//	CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+//
+//	// Copy the pixel values directly to the buffer
+//	void* mappedData;
+//	vmaMapMemory(allocator, stagingBufferMemory, &mappedData);
+//	memcpy(mappedData, pixels, SCAST_U32(imageSize));
+//	vmaUnmapMemory(allocator, stagingBufferMemory);
+//
+//	// Clean up pixel memory
+//	stbi_image_free(pixels);
+//
+//	// Now create Vulkan Image object
+//	CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
+//
+//	// Transition the texture image to the correct layout for recieving the pixel data from the buffer
+//	TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+//
+//	// Execute the copy from buffer to image
+//	CopyBufferToImage(stagingBuffer, textureImage, SCAST_U32(texWidth), SCAST_U32(texHeight));
+//
+//	// Now transition the image layout again to allow for sampling in the shader
+//	TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+//
+//	// Free up the staging buffer
+//	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
+//}
+//
+//void VulkanApplication::CreateTextureImageView()
+//{
+//	textureImageView = SwapChain::CreateImageView(vulkan->Device(), textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
+//}
 
-	// Create a staging buffer for the pixel data
-	VkBuffer stagingBuffer;
-	VmaAllocation stagingBufferMemory;
-	CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-	// Copy the pixel values directly to the buffer
-	void* mappedData;
-	vmaMapMemory(allocator, stagingBufferMemory, &mappedData);
-	memcpy(mappedData, pixels, SCAST_U32(imageSize));
-	vmaUnmapMemory(allocator, stagingBufferMemory);
-
-	// Clean up pixel memory
-	stbi_image_free(pixels);
-
-	// Now create Vulkan Image object
-	CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
-
-	// Transition the texture image to the correct layout for recieving the pixel data from the buffer
-	TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	// Execute the copy from buffer to image
-	CopyBufferToImage(stagingBuffer, textureImage, SCAST_U32(texWidth), SCAST_U32(texHeight));
-
-	// Now transition the image layout again to allow for sampling in the shader
-	TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-	// Free up the staging buffer
-	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
-}
-
-void VulkanApplication::CreateTextureImageView()
-{
-	textureImageView = SwapChain::CreateImageView(vulkan->Device(), textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
-}
-
-void VulkanApplication::CreateTextureSampler()
-{
-	VkSamplerCreateInfo samplerInfo = {};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_LINEAR; // Apply linear interpolation to over/under-sampled texels
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.anisotropyEnable = VK_TRUE; // Enable anisotropic filtering 
-	samplerInfo.maxAnisotropy = 16;
-	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-	samplerInfo.unnormalizedCoordinates = VK_FALSE; // Clamp texel coordinates to [0, 1]
-	samplerInfo.compareEnable = VK_FALSE;
-	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 0.0f;
-
-	if (vkCreateSampler(vulkan->Device(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create texture sampler");
-	}
-}
+//void VulkanApplication::CreateTextureSampler()
+//{
+//	VkSamplerCreateInfo samplerInfo = {};
+//	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+//	samplerInfo.magFilter = VK_FILTER_LINEAR; // Apply linear interpolation to over/under-sampled texels
+//	samplerInfo.minFilter = VK_FILTER_LINEAR;
+//	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+//	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+//	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+//	samplerInfo.anisotropyEnable = VK_TRUE; // Enable anisotropic filtering 
+//	samplerInfo.maxAnisotropy = 16;
+//	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+//	samplerInfo.unnormalizedCoordinates = VK_FALSE; // Clamp texel coordinates to [0, 1]
+//	samplerInfo.compareEnable = VK_FALSE;
+//	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+//	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+//	samplerInfo.mipLodBias = 0.0f;
+//	samplerInfo.minLod = 0.0f;
+//	samplerInfo.maxLod = 0.0f;
+//
+//	if (vkCreateSampler(vulkan->Device(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS)
+//	{
+//		throw std::runtime_error("Failed to create texture sampler");
+//	}
+//}
 
 void VulkanApplication::CreateDepthSampler()
 {
@@ -1586,14 +1580,14 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		// Model diffuse texture
 		VkDescriptorImageInfo modelTextureInfo = {};
 		modelTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		modelTextureInfo.imageView = textureImageView;
-		modelTextureInfo.sampler = textureSampler;
+		modelTextureInfo.imageView = chaletTexture.GetImage().ImageView();
+		modelTextureInfo.sampler = chaletTexture.Sampler();
 
 		// Visibility Buffer
 		VkDescriptorImageInfo visBufferInfo = {};
 		visBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		visBufferInfo.imageView = visibilityBuffer.visibility.imageView;
-		visBufferInfo.sampler = textureSampler;
+		visBufferInfo.sampler = chaletTexture.Sampler();
 
 		// Model UBO
 		mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
@@ -1720,6 +1714,8 @@ void VulkanApplication::FrameBufferResizeCallback(GLFWwindow* window, int width,
 	auto app = reinterpret_cast<VulkanApplication*>(glfwGetWindowUserPointer(window));
 	app->framebufferResized = true;
 }
+
+
 #pragma endregion 
 
 } // namespace
