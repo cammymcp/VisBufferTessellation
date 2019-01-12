@@ -5,6 +5,11 @@ namespace vbt
 {
 	void Image::Create(uint32_t imageWidth, uint32_t imageHeight, VkFormat imageFormat, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkMemoryPropertyFlags properties, VmaAllocator& allocator)
 	{
+		// Store details
+		format = imageFormat;
+		width = imageWidth;
+		height = imageHeight;
+
 		VkImageCreateInfo imageInfo = {};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 		imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -25,11 +30,6 @@ namespace vbt
 		VmaAllocationCreateInfo allocInfo = {};
 		allocInfo.usage = memoryUsage;
 		allocInfo.requiredFlags = properties;
-
-		// Store details
-		format = imageFormat;
-		width = imageWidth;
-		height = imageHeight;
 
 		if (vmaCreateImage(allocator, &imageInfo, &allocInfo, &image, &imageMemory, nullptr) != VK_SUCCESS)
 		{

@@ -71,11 +71,8 @@ void VulkanApplication::CleanUp()
 
 	// Destroy texture objects
 	vkDestroySampler(vulkan->Device(), depthSampler, nullptr);
-	vkDestroyImageView(vulkan->Device(), visibilityBuffer.visibility.imageView, nullptr);
-	vmaDestroyImage(allocator, visibilityBuffer.visibility.image, visibilityBuffer.visibility.imageMemory);
-	chaletTexture.CleanUp(allocator, vulkan->Device());
-	vkDestroyImageView(vulkan->Device(), debugAttachment.imageView, nullptr);
-	vmaDestroyImage(allocator, debugAttachment.image, debugAttachment.imageMemory);
+	visibilityBuffer.visibility.CleanUp(allocator, vulkan->Device());
+	debugAttachment.CleanUp(allocator, vulkan->Device());
 
 	// Destroy Descriptor Pool
 	vkDestroyDescriptorPool(vulkan->Device(), descriptorPool, nullptr);
@@ -142,10 +139,8 @@ void VulkanApplication::RecreateSwapChain()
 void VulkanApplication::CleanUpSwapChain()
 {
 	// Destroy depth buffers
-	vkDestroyImageView(vulkan->Device(), visibilityBuffer.depth.imageView, nullptr);
-	vmaDestroyImage(allocator, visibilityBuffer.depth.image, visibilityBuffer.depth.imageMemory);
-	vkDestroyImageView(vulkan->Device(), visBuffShadeDepthImageView, nullptr);
-	vmaDestroyImage(allocator, visBuffShadeDepthImage, visBuffShadeDepthImageMemory);
+	visibilityBuffer.depth.CleanUp(allocator, vulkan->Device());
+	visBuffShadeDepthImage.CleanUp(allocator, vulkan->Device());
 
 	// Destroy frame buffers
 	for (size_t i = 0; i < swapChainFramebuffers.size(); i++)
@@ -485,7 +480,7 @@ void VulkanApplication::CreateVisBuffWritePipelineLayout()
 void VulkanApplication::CreateVisBuffWriteRenderPass()
 {
 	// Create Frame Buffer attachments
-	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &visibilityBuffer.visibility); // 32 bit uint will be unpacked into four 8bit floats
+	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &visibilityBuffer.visibility, allocator); // 32 bit uint will be unpacked into four 8bit floats
 	CreateDepthResources();
 
 	// Create attachment descriptions for the visibility buffer
@@ -511,8 +506,8 @@ void VulkanApplication::CreateVisBuffWriteRenderPass()
 		}
 	}
 	// Fill Formats
-	attachments[0].format = visibilityBuffer.visibility.format;
-	attachments[1].format = visibilityBuffer.depth.format;
+	attachments[0].format = visibilityBuffer.visibility.Format();
+	attachments[1].format = visibilityBuffer.depth.Format();
 
 	// Create attachment references for the subpass to use
 	std::vector<VkAttachmentReference> colorReferences;
@@ -563,7 +558,7 @@ void VulkanApplication::CreateVisBuffWriteRenderPass()
 void VulkanApplication::CreateVisBuffShadeRenderPass()
 {
 	// Create debug attachment
-	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &debugAttachment);
+	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &debugAttachment, allocator);
 
 	std::array<VkAttachmentDescription, 3> attachments = {};
 	// Color attachment
@@ -576,7 +571,7 @@ void VulkanApplication::CreateVisBuffShadeRenderPass()
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 	// Debug Attachment
-	attachments[1].format = debugAttachment.format;
+	attachments[1].format = debugAttachment.Format();
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -674,8 +669,8 @@ void VulkanApplication::CreateFrameBuffers()
 {
 	// Create Visibility Buffer frame buffer
 	std::array<VkImageView, 2> attachments = {};
-	attachments[0] = visibilityBuffer.visibility.imageView;
-	attachments[1] = visibilityBuffer.depth.imageView;
+	attachments[0] = visibilityBuffer.visibility.ImageView();
+	attachments[1] = visibilityBuffer.depth.ImageView();
 
 	VkFramebufferCreateInfo framebufferInfo = {};
 	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -699,8 +694,8 @@ void VulkanApplication::CreateFrameBuffers()
 		std::array<VkImageView, 3> attachments =
 		{
 			vulkan->Swapchain().ImageViews()[i],
-			debugAttachment.imageView,
-			visBuffShadeDepthImageView
+			debugAttachment.ImageView(),
+			visBuffShadeDepthImage.ImageView()
 		};
 
 		VkFramebufferCreateInfo framebufferInfo = {};
@@ -720,13 +715,10 @@ void VulkanApplication::CreateFrameBuffers()
 	}
 }
 
-void VulkanApplication::CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, FrameBufferAttachment* attachment)
+void VulkanApplication::CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, Image* attachment, VmaAllocator& allocator)
 {
-	// Set format
-	attachment->format = format;
-
 	// Create image
-	CreateImage(vulkan->Swapchain().Extent().width, vulkan->Swapchain().Extent().height, format, VK_IMAGE_TILING_OPTIMAL, usage, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, attachment->image, attachment->imageMemory);
+	attachment->Create(vulkan->Swapchain().Extent().width, vulkan->Swapchain().Extent().height, format, VK_IMAGE_TILING_OPTIMAL, usage, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
 
 	// Create image view
 	VkImageAspectFlags aspectMask = 0;
@@ -734,7 +726,7 @@ void VulkanApplication::CreateFrameBufferAttachment(VkFormat format, VkImageUsag
 		aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 	if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT)
 		aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-	attachment->imageView = SwapChain::CreateImageView(vulkan->Device(), attachment->image, format, aspectMask);
+	attachment->CreateImageView(vulkan->Device(), aspectMask);
 }
 
 // Acquires image from swap chain
@@ -1049,22 +1041,21 @@ void VulkanApplication::CreateDepthResources()
 {
 	// Select format
 	VkFormat depthFormat = FindDepthFormat();
-	visibilityBuffer.depth.format = depthFormat;
 
 	// Create Image and ImageView objects
-	CreateImage(vulkan->Swapchain().Extent().width, vulkan->Swapchain().Extent().height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, visibilityBuffer.depth.image, visibilityBuffer.depth.imageMemory);
-	visibilityBuffer.depth.imageView = SwapChain::CreateImageView(vulkan->Device(), visibilityBuffer.depth.image, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+	visibilityBuffer.depth.Create(vulkan->Swapchain().Extent().width, vulkan->Swapchain().Extent().height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
+	visibilityBuffer.depth.CreateImageView(vulkan->Device(), VK_IMAGE_ASPECT_DEPTH_BIT);
 
 	// Transition depth image for shader usage
-	TransitionImageLayout(visibilityBuffer.depth.image, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	visibilityBuffer.depth.TransitionLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 
 	// Now set up the depth attachments for the shade pass (TODO: may be completely unnecessary)
 	// Create Image and ImageView objects
-	CreateImage(vulkan->Swapchain().Extent().width, vulkan->Swapchain().Extent().height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, visBuffShadeDepthImage, visBuffShadeDepthImageMemory);
-	visBuffShadeDepthImageView = SwapChain::CreateImageView(vulkan->Device(), visBuffShadeDepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+	visBuffShadeDepthImage.Create(vulkan->Swapchain().Extent().width, vulkan->Swapchain().Extent().height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
+	visBuffShadeDepthImage.CreateImageView(vulkan->Device(), VK_IMAGE_ASPECT_DEPTH_BIT);
 
 	// Transition depth image for shader usage
-	TransitionImageLayout(visBuffShadeDepthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+	visBuffShadeDepthImage.TransitionLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 }
 
 VkFormat VulkanApplication::FindDepthFormat()
@@ -1328,136 +1319,6 @@ void VulkanApplication::CreateDepthSampler()
 	}
 }
 
-void VulkanApplication::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkMemoryPropertyFlags properties, VkImage& image, VmaAllocation& allocation)
-{
-	VkImageCreateInfo imageInfo = {};
-	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = SCAST_U32(width);
-	imageInfo.extent.height = SCAST_U32(height);
-	imageInfo.extent.depth = 1;
-	imageInfo.mipLevels = 1;
-	imageInfo.arrayLayers = 1;
-	imageInfo.format = format;
-	imageInfo.tiling = tiling;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	imageInfo.usage = usage;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageInfo.flags = 0; // Optional
-
-	//Create allocation info
-	VmaAllocationCreateInfo allocInfo = {};
-	allocInfo.usage = memoryUsage;
-	allocInfo.requiredFlags = properties;
-
-	if (vmaCreateImage(allocator, &imageInfo, &allocInfo, &image, &allocation, nullptr) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create image");
-	}
-}
-
-void VulkanApplication::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout srcLayout, VkImageLayout dstLayout)
-{
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	// Use an image memory barrier to perform the layout transition
-	VkImageMemoryBarrier barrier = {};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = srcLayout;
-	barrier.newLayout = dstLayout;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // Don't bother transitioning queue family
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = image;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-	// Determine aspect mask
-	if (dstLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-		if (HasStencilComponent(format)) {
-			barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-		}
-	}
-	else {
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	}
-
-	// Since barriers are primarily used for synchronisation, we must specify which processes to wait on, and which processes should wait on this
-	// We need to handle the transition from Undefined to Transfer Destination, from Transfer Destination to Shader Access and from Undefinded to Depth Attachment
-	VkPipelineStageFlags sourceStage;
-	VkPipelineStageFlags destinationStage;
-
-	if (srcLayout == VK_IMAGE_LAYOUT_UNDEFINED && dstLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-	{
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	}
-	else if (srcLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && dstLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-	{
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	}
-	else if (srcLayout == VK_IMAGE_LAYOUT_UNDEFINED && dstLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-	{
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-	}
-	else
-	{
-		throw std::invalid_argument("Unsupported layout transition");
-	}
-
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		sourceStage, destinationStage,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
-	);
-
-	EndSingleTimeCommands(commandBuffer);
-}
-
-void VulkanApplication::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
-{
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	VkBufferImageCopy region = {};
-	region.bufferOffset = 0;
-	region.bufferRowLength = 0;
-	region.bufferImageHeight = 0;
-
-	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.imageSubresource.mipLevel = 0;
-	region.imageSubresource.baseArrayLayer = 0;
-	region.imageSubresource.layerCount = 1;
-
-	region.imageOffset = { 0, 0, 0 };
-	region.imageExtent = {
-		width,
-		height,
-		1
-	};
-
-	vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-	EndSingleTimeCommands(commandBuffer);
-}
-#pragma endregion
-
 #pragma region Descriptor Functions
 void VulkanApplication::CreateDescriptorPool()
 {
@@ -1586,7 +1447,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		// Visibility Buffer
 		VkDescriptorImageInfo visBufferInfo = {};
 		visBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		visBufferInfo.imageView = visibilityBuffer.visibility.imageView;
+		visBufferInfo.imageView = visibilityBuffer.visibility.ImageView();
 		visBufferInfo.sampler = chaletTexture.Sampler();
 
 		// Model UBO

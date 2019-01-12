@@ -18,6 +18,7 @@ namespace vbt
 
 		VkImage VkHandle() { return image; }
 		VkImageView ImageView() { return imageView; }
+		VkFormat Format() { return format; }
 
 	protected:
 		bool HasStencilComponent(VkFormat format);

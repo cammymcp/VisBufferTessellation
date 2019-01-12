@@ -26,17 +26,10 @@ const VkClearColorValue CLEAR_COLOUR = { 0.7f, 0.3f, 0.25f, 1.0f };
 #pragma endregion
 
 #pragma region Frame Buffers
-struct FrameBufferAttachment
-{
-	VkImage image;
-	VkImageView imageView;
-	VmaAllocation imageMemory;
-	VkFormat format;
-};
 struct VisibilityBuffer
 {
 	VkFramebuffer frameBuffer;
-	FrameBufferAttachment visibility, depth;
+	vbt::Image visibility, depth;
 };
 #pragma endregion
 
@@ -91,7 +84,7 @@ namespace vbt
 
 #pragma region Drawing Functions
 		void CreateFrameBuffers();
-		void CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, FrameBufferAttachment* attachment);
+		void CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, Image* attachment, VmaAllocator& allocator);
 		void DrawFrame();
 #pragma endregion
 
@@ -121,13 +114,7 @@ namespace vbt
 #pragma endregion
 
 #pragma region Texture Functions
-		void CreateTextureImage();
-		void CreateTextureImageView();
-		void CreateTextureSampler();
 		void CreateDepthSampler();
-		void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkMemoryPropertyFlags properties, VkImage& image, VmaAllocation& allocation);
-		void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout srcLayout, VkImageLayout dstLayout);
-		void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 #pragma endregion
 
 #pragma region Descriptor Functions
@@ -174,9 +161,7 @@ namespace vbt
 #pragma endregion
 
 #pragma region Depth Buffer Objects
-		VkImage visBuffShadeDepthImage;
-		VmaAllocation visBuffShadeDepthImageMemory;
-		VkImageView visBuffShadeDepthImageView;
+		Image visBuffShadeDepthImage;
 #pragma endregion
 
 #pragma region Buffer Objects
@@ -205,7 +190,7 @@ namespace vbt
 #pragma endregion
 
 #pragma region Debug Objects
-		FrameBufferAttachment debugAttachment;
+		Image debugAttachment;
 #pragma endregion
 	};
 }
