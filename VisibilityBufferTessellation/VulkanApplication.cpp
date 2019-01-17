@@ -72,6 +72,7 @@ void VulkanApplication::CleanUp()
 	CleanUpSwapChain();
 
 	// Destroy texture objects
+	chaletTexture.CleanUp(allocator, vulkan->Device());
 	vkDestroySampler(vulkan->Device(), depthSampler, nullptr);
 	visibilityBuffer.visibility.CleanUp(allocator, vulkan->Device());
 	debugAttachment.CleanUp(allocator, vulkan->Device());
