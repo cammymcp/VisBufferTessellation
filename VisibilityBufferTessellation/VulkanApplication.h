@@ -8,8 +8,9 @@
 #include "vk_mem_alloc.h"
 #include "VulkanCore.h"
 #include "Buffer.h"
-#include "Mesh.h"
+#include "Terrain.h"
 #include "Texture.h"
+#include "Camera.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // Ensure that GLM works in Vulkan's clip coordinates of 0.0 to 1.0
@@ -83,6 +84,7 @@ namespace vbt
 #pragma endregion
 
 #pragma region Drawing Functions
+		void InitCamera();
 		void CreateFrameBuffers();
 		void CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, Image* attachment, VmaAllocator& allocator);
 		void DrawFrame();
@@ -134,6 +136,7 @@ namespace vbt
 #pragma region Core Objects
 		GLFWwindow* window;
 		VulkanCore* vulkan;
+		Camera camera;
 #pragma endregion
 
 #pragma region Graphics Pipeline Objects
@@ -178,7 +181,8 @@ namespace vbt
 #pragma endregion
 
 #pragma region Model Objects
-		Mesh chalet;
+		//Mesh chalet;
+		Terrain terrain;
 #pragma endregion
 
 #pragma region Descriptor Objects

@@ -1,5 +1,5 @@
 #include "Mesh.h"
-#include "HelperFunctions.h"
+#include "VbtUtils.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
@@ -28,7 +28,7 @@ namespace vbt
 			for (const auto& index : shape.mesh.indices)
 			{
 				Vertex vertex = {};
-				VertexAttributes vertexAttributes = {}; // For storing geometry attributes only to be accessed by shading pass. Position, colour and tex are packed into 2 vec4s
+				VertexAttributes vertexAttributes = {}; // For storing geometry attributes only to be accessed by shading pass. Position, normal and tex are packed into 2 vec4s
 
 				// Vertices array is an array of floats, so we have to multiply the index by three each time, and offset by 0/1/2 to get the X/Y/Z components
 				vertex.pos =
@@ -37,22 +37,22 @@ namespace vbt
 					attribute.vertices[3 * index.vertex_index + 1],
 					attribute.vertices[3 * index.vertex_index + 2]
 				};
-				vertexAttributes.posXYZcolX.x = vertex.pos.x;
-				vertexAttributes.posXYZcolX.y = vertex.pos.y;
-				vertexAttributes.posXYZcolX.z = vertex.pos.z;
+				vertexAttributes.posXYZnormX.x = vertex.pos.x;
+				vertexAttributes.posXYZnormX.y = vertex.pos.y;
+				vertexAttributes.posXYZnormX.z = vertex.pos.z;
 
-				vertex.colour = { 1.0f, 1.0f, 1.0f };
-				vertexAttributes.posXYZcolX.w = vertex.colour.x;
-				vertexAttributes.colYZtexXY.x = vertex.colour.y;
-				vertexAttributes.colYZtexXY.y = vertex.colour.z;
+				vertex.normal = { 1.0f, 1.0f, 1.0f };
+				vertexAttributes.posXYZnormX.w = vertex.normal.x;
+				vertexAttributes.normYZtexXY.x = vertex.normal.y;
+				vertexAttributes.normYZtexXY.y = vertex.normal.z;
 
 				vertex.uv =
 				{
 					attribute.texcoords[2 * index.texcoord_index + 0],
 					1.0f - attribute.texcoords[2 * index.texcoord_index + 1] // Flip texture Y coordinate to match vulkan coord system
 				};
-				vertexAttributes.colYZtexXY.z = vertex.uv.x;
-				vertexAttributes.colYZtexXY.w = vertex.uv.y;
+				vertexAttributes.normYZtexXY.z = vertex.uv.x;
+				vertexAttributes.normYZtexXY.w = vertex.uv.y;
 
 				// Check if we've already seen this vertex before, and add it to the vertex buffer if not
 				if (uniqueVertices.count(vertex) == 0)

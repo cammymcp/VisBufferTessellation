@@ -1,7 +1,7 @@
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 #include "VulkanApplication.h"
-#include "HelperFunctions.h"
+#include "VbtUtils.h"
 
 namespace vbt {
 
@@ -29,6 +29,7 @@ void VulkanApplication::Init()
 	// Initialise core objects and functionality
 	vulkan = new VulkanCore();
 	vulkan->Init(window);
+	InitCamera();
 	CreateVmaAllocator();
 	CreateCommandPool();
 	CreateVisBuffWriteRenderPass();
@@ -40,7 +41,8 @@ void VulkanApplication::Init()
 	CreateVisBuffShadePipeline();
 	chaletTexture.Create(TEXTURE_PATH, allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 	CreateDepthSampler();
-	chalet.LoadFromFile(MODEL_PATH);
+	//chalet.LoadFromFile(MODEL_PATH);
+	terrain.Generate(glm::vec3(0.0f), 1.0f, 1.0f);
 	CreateVertexBuffer();
 	CreateAttributeBuffer();
 	CreateIndexBuffer();
@@ -665,6 +667,13 @@ VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& co
 #pragma endregion
 
 #pragma region Drawing Functions
+void VulkanApplication::InitCamera()
+{
+	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 10.0f);
+	camera.SetPosition(glm::vec3(0.0f, 0.0f, -2.0f));
+	camera.SetRotation(glm::vec3(0.0f, 0.0f, 0.0f));
+}
+
 void VulkanApplication::CreateFrameBuffers()
 {
 	// Create Visibility Buffer frame buffer
@@ -987,7 +996,7 @@ void VulkanApplication::RecordVisBuffWriteCommandBuffer()
 	vkCmdBindIndexBuffer(visBuffWriteCommandBuffer, indexBuffer.VkHandle(), 0, VK_INDEX_TYPE_UINT32);
 
 	// Draw using index buffer
-	vkCmdDrawIndexed(visBuffWriteCommandBuffer, SCAST_U32(chalet.Indices().size()), 1, 0, 0, 0);
+	vkCmdDrawIndexed(visBuffWriteCommandBuffer, SCAST_U32(terrain.Indices().size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(visBuffWriteCommandBuffer);
 
@@ -1113,12 +1122,12 @@ void VulkanApplication::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage
 void VulkanApplication::CreateVertexBuffer()
 {
 	// Create staging buffer on host memory
-	VkDeviceSize bufferSize = sizeof(chalet.Vertices()[0]) * chalet.Vertices().size();
+	VkDeviceSize bufferSize = sizeof(terrain.Vertices()[0]) * terrain.Vertices().size();
 	Buffer stagingBuffer;
 	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
 	// Map vertex data to staging buffer memory allocation
-	stagingBuffer.MapData(chalet.Vertices().data(), allocator);
+	stagingBuffer.MapData(terrain.Vertices().data(), allocator);
 
 	// Create vertex buffer on device local memory
 	vertexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
@@ -1132,12 +1141,12 @@ void VulkanApplication::CreateVertexBuffer()
 void VulkanApplication::CreateAttributeBuffer()
 {
 	// Create staging buffer on host memory
-	VkDeviceSize bufferSize = sizeof(chalet.PackedVertexAttributes()[0]) * chalet.PackedVertexAttributes().size();
+	VkDeviceSize bufferSize = sizeof(terrain.PackedVertexAttributes()[0]) * terrain.PackedVertexAttributes().size();
 	Buffer stagingBuffer;
 	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
 	// Map attribute data to staging buffer memory allocation
-	stagingBuffer.MapData(chalet.PackedVertexAttributes().data(), allocator);
+	stagingBuffer.MapData(terrain.PackedVertexAttributes().data(), allocator);
 
 	// Create attribute buffer on device local memory
 	vertexAttributeBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
@@ -1151,12 +1160,12 @@ void VulkanApplication::CreateAttributeBuffer()
 void VulkanApplication::CreateIndexBuffer()
 {
 	// Create staging buffer on host memory
-	VkDeviceSize bufferSize = sizeof(chalet.Indices()[0]) * chalet.Indices().size();
+	VkDeviceSize bufferSize = sizeof(terrain.Indices()[0]) * terrain.Indices().size();
 	Buffer stagingBuffer;
 	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
 	// Map index data to staging buffer memory allocation
-	stagingBuffer.MapData(chalet.Indices().data(), allocator);
+	stagingBuffer.MapData(terrain.Indices().data(), allocator);
 
 	// Create index buffer on device local memory
 	indexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
@@ -1184,8 +1193,8 @@ void VulkanApplication::UpdateMVPUniformBuffer()
 
 	// Now generate the model, view and projection matrices
 	glm::mat4 modelMatrix = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	glm::mat4 viewMatrix = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	glm::mat4 projMatrix = glm::perspective(glm::radians(45.0f), vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 10.0f);
+	glm::mat4 viewMatrix = camera.ViewMatrix();
+	glm::mat4 projMatrix = camera.ProjectionMatrix();
 	projMatrix[1][1] *= -1; // Flip Y of projection matrix to account for OpenGL's flipped Y clip axis
 	glm::mat4 inverseViewProj = glm::inverse((projMatrix * viewMatrix));
 
@@ -1403,7 +1412,7 @@ void VulkanApplication::CreateWritePassDescriptorSetLayout()
 	modelUboLayoutBinding.descriptorCount = 1;
 	modelUboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // Specify that this descriptor will be used in the vertex shader
 
-																   // Create descriptor set layout
+	// Create descriptor set layout
 	std::array<VkDescriptorSetLayoutBinding, 1> bindings = { modelUboLayoutBinding };
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1454,10 +1463,10 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
 
 		// Index Buffer
-		indexBuffer.SetupDescriptor(sizeof(chalet.Indices()[0]) * chalet.Indices().size(), 0);
+		indexBuffer.SetupDescriptor(sizeof(terrain.Indices()[0]) * terrain.Indices().size(), 0);
 
 		// Vertex Attribute Buffer
-		vertexAttributeBuffer.SetupDescriptor(sizeof(chalet.PackedVertexAttributes()[0]) * chalet.PackedVertexAttributes().size(), 0);
+		vertexAttributeBuffer.SetupDescriptor(sizeof(terrain.PackedVertexAttributes()[0]) * terrain.PackedVertexAttributes().size(), 0);
 
 		// Create a descriptor write for each descriptor in the set
 		std::array<VkWriteDescriptorSet, 5> shadePassDescriptorWrites = {};

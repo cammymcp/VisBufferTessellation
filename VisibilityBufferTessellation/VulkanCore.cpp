@@ -1,5 +1,5 @@
 #include "VulkanCore.h"
-#include "HelperFunctions.h"
+#include "VbtUtils.h"
 
 namespace vbt
 {

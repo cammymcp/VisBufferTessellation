@@ -45,6 +45,12 @@
     <ClCompile Include="Image.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Terrain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Camera.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="VulkanApplication.h">
@@ -54,9 +60,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="VulkanCore.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="HelperFunctions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="PhysicalDevice.h">
@@ -80,18 +83,27 @@
     <ClInclude Include="Image.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Terrain.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VbtUtils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\deferred.frag">
+    <None Include="shaders\visbuffshade.frag">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\deferred.vert">
+    <None Include="shaders\visbuffshade.vert">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\geometry.frag">
+    <None Include="shaders\visbuffwrite.frag">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\geometry.vert">
+    <None Include="shaders\visbuffwrite.vert">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

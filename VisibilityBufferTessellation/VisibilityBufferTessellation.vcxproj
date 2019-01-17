@@ -160,22 +160,26 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Buffer.cpp" />
+    <ClCompile Include="Camera.cpp" />
     <ClCompile Include="Image.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="PhysicalDevice.cpp" />
     <ClCompile Include="SwapChain.cpp" />
+    <ClCompile Include="Terrain.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="VulkanApplication.cpp" />
     <ClCompile Include="VulkanCore.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Buffer.h" />
-    <ClInclude Include="HelperFunctions.h" />
+    <ClInclude Include="Camera.h" />
+    <ClInclude Include="VbtUtils.h" />
     <ClInclude Include="Image.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="PhysicalDevice.h" />
     <ClInclude Include="SwapChain.h" />
+    <ClInclude Include="Terrain.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="VBTTypes.h" />
     <ClInclude Include="vk_mem_alloc.h" />
@@ -183,10 +187,10 @@
     <ClInclude Include="VulkanCore.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\deferred.frag" />
-    <None Include="shaders\deferred.vert" />
-    <None Include="shaders\geometry.frag" />
-    <None Include="shaders\geometry.vert" />
+    <None Include="shaders\visbuffshade.frag" />
+    <None Include="shaders\visbuffshade.vert" />
+    <None Include="shaders\visbuffwrite.frag" />
+    <None Include="shaders\visbuffwrite.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

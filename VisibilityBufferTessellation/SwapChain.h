@@ -4,7 +4,7 @@
 #include <vulkan\vulkan.h>
 #include <GLFW\glfw3.h>
 #include "VBTTypes.h"
-#include "HelperFunctions.h"
+#include "VbtUtils.h"
 #include <algorithm>
 #include "PhysicalDevice.h"
 

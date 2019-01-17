@@ -14,7 +14,7 @@
 struct Vertex
 {
 	glm::vec3 pos;
-	glm::vec3 colour;
+	glm::vec3 normal;
 	glm::vec2 uv;
 
 	static VkVertexInputBindingDescription GetBindingDescription()
@@ -26,7 +26,7 @@ struct Vertex
 		return bindingDescription;
 	} 
 
-	// Create an attribute description PER ATTRIBUTE (currently pos colour and texcoords)
+	// Create an attribute description PER ATTRIBUTE (currently pos normal and texcoords)
 	static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions()
 	{
 		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {};
@@ -38,7 +38,7 @@ struct Vertex
 		attributeDescriptions[1].binding = 0;
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, colour);
+		attributeDescriptions[1].offset = offsetof(Vertex, normal);
 
 		attributeDescriptions[2].binding = 0;
 		attributeDescriptions[2].location = 2;
@@ -50,7 +50,7 @@ struct Vertex
 
 	bool operator==(const Vertex& other) const
 	{
-		return pos == other.pos && colour == other.colour && uv == other.uv;
+		return pos == other.pos && normal == other.normal && uv == other.uv;
 	}
 };
 
@@ -62,7 +62,7 @@ namespace std
 		size_t operator()(Vertex const& vertex) const
 		{
 			return ((hash<glm::vec3>()(vertex.pos) ^
-				(hash<glm::vec3>()(vertex.colour) << 1)) >> 1) ^
+				(hash<glm::vec3>()(vertex.normal) << 1)) >> 1) ^
 				(hash<glm::vec2>()(vertex.uv) << 1);
 		}
 	};
@@ -71,8 +71,8 @@ namespace std
 // 16-byte aligned vertex attributes. 
 struct VertexAttributes
 {
-	glm::vec4 posXYZcolX;
-	glm::vec4 colYZtexXY;
+	glm::vec4 posXYZnormX;
+	glm::vec4 normYZtexXY;
 };
 #pragma endregion
 
