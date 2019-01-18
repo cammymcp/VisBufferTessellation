@@ -23,6 +23,10 @@ namespace vbt
 				position -= glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f))) * speed;
 			if (input.right)
 				position += glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f))) * speed;
+			if (input.up)
+				position -= glm::normalize(glm::cross(forward, glm::vec3(1.0f, 0.0f, 0.0f))) * speed;
+			if (input.down)
+				position += glm::normalize(glm::cross(forward, glm::vec3(1.0f, 0.0f, 0.0f))) * speed;
 
 			UpdateViewMatrix();
 		}
@@ -36,7 +40,7 @@ namespace vbt
 		// Perform per-axis rotation
 		rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
 		rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-		rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+		//rotationMatrix = glm::rotate(rotationMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f)); // Commented out to lock roll
 
 		// Build translation matrix
 		translationMatrix = glm::translate(glm::mat4(1.0f), position);
@@ -91,6 +95,6 @@ namespace vbt
 	
 	bool Camera::IsMoving()
 	{
-		return input.forward || input.back || input.left || input.right;
+		return input.forward || input.back || input.left || input.right || input.up || input.down;
 	}
 }

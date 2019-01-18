@@ -6,11 +6,6 @@
 
 namespace vbt {
 
-	bool HasStencilComponent(VkFormat format)
-	{
-		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
-	}
-
 #pragma region Core Functions
 void VulkanApplication::InitWindow()
 {
@@ -157,6 +152,20 @@ void VulkanApplication::ProcessKeyInput(GLFWwindow* window, int key, int scancod
 			vulkanApp->camera.input.right = true;
 		else if (action == GLFW_RELEASE)
 			vulkanApp->camera.input.right = false;
+	}
+	if (key == GLFW_KEY_Q)
+	{
+		if (action == GLFW_PRESS)
+			vulkanApp->camera.input.up = true;
+		else if (action == GLFW_RELEASE)
+			vulkanApp->camera.input.up = false;
+	}
+	if (key == GLFW_KEY_E)
+	{
+		if (action == GLFW_PRESS)
+			vulkanApp->camera.input.down = true;
+		else if (action == GLFW_RELEASE)
+			vulkanApp->camera.input.down = false;
 	}
 	if (key == GLFW_KEY_R && action == GLFW_PRESS)
 		vulkanApp->camera.Reset();
@@ -750,7 +759,7 @@ VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& co
 #pragma region Drawing Functions
 void VulkanApplication::InitCamera()
 {
-	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 10.0f, true);
+	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 100.0f, true);
 	camera.SetPosition(glm::vec3(0.0f, 0.0f, -2.0f), true);
 	camera.SetRotation(glm::vec3(0.0f, 0.0f, 0.0f), true);
 }
@@ -1273,7 +1282,7 @@ void VulkanApplication::UpdateMVPUniformBuffer()
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 	// Now generate the model, view and projection matrices
-	glm::mat4 modelMatrix = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::mat4 modelMatrix = glm::mat4(1.0f);// glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	glm::mat4 viewMatrix = camera.ViewMatrix();
 	glm::mat4 projMatrix = camera.ProjectionMatrix();
 	projMatrix[1][1] *= -1; // Flip Y of projection matrix to account for OpenGL's flipped Y clip axis
@@ -1311,78 +1320,6 @@ void VulkanApplication::CreateVmaAllocator()
 #pragma endregion
 
 #pragma region Texture Functions
-//void VulkanApplication::CreateTextureImage()
-//{
-//	// Load image file with STB library
-//	int texWidth, texHeight, texChannels;
-//	stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-//	VkDeviceSize imageSize = texWidth * texHeight * 4;
-//	if (!pixels)
-//	{
-//		throw std::runtime_error("Failed to load texture image");
-//	}
-//
-//	// Create a staging buffer for the pixel data
-//	VkBuffer stagingBuffer;
-//	VmaAllocation stagingBufferMemory;
-//	CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-//
-//	// Copy the pixel values directly to the buffer
-//	void* mappedData;
-//	vmaMapMemory(allocator, stagingBufferMemory, &mappedData);
-//	memcpy(mappedData, pixels, SCAST_U32(imageSize));
-//	vmaUnmapMemory(allocator, stagingBufferMemory);
-//
-//	// Clean up pixel memory
-//	stbi_image_free(pixels);
-//
-//	// Now create Vulkan Image object
-//	CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
-//
-//	// Transition the texture image to the correct layout for recieving the pixel data from the buffer
-//	TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-//
-//	// Execute the copy from buffer to image
-//	CopyBufferToImage(stagingBuffer, textureImage, SCAST_U32(texWidth), SCAST_U32(texHeight));
-//
-//	// Now transition the image layout again to allow for sampling in the shader
-//	TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-//
-//	// Free up the staging buffer
-//	vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferMemory);
-//}
-//
-//void VulkanApplication::CreateTextureImageView()
-//{
-//	textureImageView = SwapChain::CreateImageView(vulkan->Device(), textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
-//}
-
-//void VulkanApplication::CreateTextureSampler()
-//{
-//	VkSamplerCreateInfo samplerInfo = {};
-//	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-//	samplerInfo.magFilter = VK_FILTER_LINEAR; // Apply linear interpolation to over/under-sampled texels
-//	samplerInfo.minFilter = VK_FILTER_LINEAR;
-//	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-//	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-//	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-//	samplerInfo.anisotropyEnable = VK_TRUE; // Enable anisotropic filtering 
-//	samplerInfo.maxAnisotropy = 16;
-//	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-//	samplerInfo.unnormalizedCoordinates = VK_FALSE; // Clamp texel coordinates to [0, 1]
-//	samplerInfo.compareEnable = VK_FALSE;
-//	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-//	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-//	samplerInfo.mipLodBias = 0.0f;
-//	samplerInfo.minLod = 0.0f;
-//	samplerInfo.maxLod = 0.0f;
-//
-//	if (vkCreateSampler(vulkan->Device(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS)
-//	{
-//		throw std::runtime_error("Failed to create texture sampler");
-//	}
-//}
-
 void VulkanApplication::CreateDepthSampler()
 {
 	VkSamplerCreateInfo samplerInfo = {};

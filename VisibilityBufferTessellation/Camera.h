@@ -34,6 +34,8 @@ namespace vbt
 			bool back = false;
 			bool left = false;
 			bool right = false;
+			bool up = false;
+			bool down = false;
 		} input;
 
 	private:
