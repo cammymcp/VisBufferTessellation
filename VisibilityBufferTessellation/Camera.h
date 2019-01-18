@@ -13,16 +13,17 @@ namespace vbt
 	{
 	public:
 		void Update(float frameTime);
-		void SetPerspective(float fov, float aspect, float nearPlane, float farPlane);
-		void SetPosition(glm::vec3 pos);
-		void SetRotation(glm::vec3 rot);
+		void SetPerspective(float fov, float aspect, float nearPlane, float farPlane, bool setAsDefault = false);
+		void SetPosition(glm::vec3 pos, bool setAsDefault = false);
+		void SetRotation(glm::vec3 rot, bool setAsDefault = false);
 		void Rotate(glm::vec3 delta);
 		void Translate(glm::vec3 delta);
+		void Reset();
 
 		glm::mat4 ViewMatrix() const { return viewMatrix; }
 		glm::mat4 ProjectionMatrix() const { return projMatrix; }
 
-		float rotateSpeed = 1.0f;
+		float rotateSpeed = 0.25f;
 		float moveSpeed = 1.0f;
 
 		bool updated = false;
@@ -46,6 +47,11 @@ namespace vbt
 		glm::vec3 rotation = glm::vec3();
 		float fov;
 		float nearPlane, farPlane;
+
+		// Used to reset camera to initial position
+		glm::mat4 defaultProjMatrix; 
+		glm::vec3 defaultPosition = glm::vec3();
+		glm::vec3 defaultRotation = glm::vec3();
 	};
 }
 

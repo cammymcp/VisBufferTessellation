@@ -46,23 +46,26 @@ namespace vbt
 		updated = true;
 	}
 
-	void Camera::SetPerspective(float fov, float aspect, float nearPlane, float farPlane)
+	void Camera::SetPerspective(float fov, float aspect, float nearPlane, float farPlane, bool setAsDefault)
 	{
 		this->fov = fov;
 		this->nearPlane = nearPlane;
 		this->farPlane = farPlane;
 		projMatrix = glm::perspective(glm::radians(fov), aspect, nearPlane, farPlane);
+		if (setAsDefault) defaultProjMatrix = projMatrix;
 	}
 
-	void Camera::SetPosition(glm::vec3 pos)
+	void Camera::SetPosition(glm::vec3 pos, bool setAsDefault)
 	{
 		position = pos;
+		if (setAsDefault) defaultPosition = position;
 		UpdateViewMatrix();
 	}
 
-	void Camera::SetRotation(glm::vec3 rot)
+	void Camera::SetRotation(glm::vec3 rot, bool setAsDefault)
 	{
 		rotation = rot;
+		if (setAsDefault) defaultRotation = rotation;
 		UpdateViewMatrix();
 	}
 
@@ -75,6 +78,14 @@ namespace vbt
 	void Camera::Translate(glm::vec3 delta)
 	{
 		position += delta;
+		UpdateViewMatrix();
+	}
+
+	void Camera::Reset()
+	{
+		position = defaultPosition;
+		rotation = defaultRotation;
+		projMatrix = defaultProjMatrix;
 		UpdateViewMatrix();
 	}
 	

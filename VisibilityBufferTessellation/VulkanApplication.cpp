@@ -1,4 +1,5 @@
 #define VMA_IMPLEMENTATION
+#include <chrono>
 #include "vk_mem_alloc.h"
 #include "VulkanApplication.h"
 #include "VbtUtils.h"
@@ -22,6 +23,8 @@ void VulkanApplication::InitWindow()
 	window = glfwCreateWindow(WIDTH, HEIGHT, "Visibility Buffer", nullptr, nullptr);
 	glfwSetWindowUserPointer(window, this);
 	glfwSetFramebufferSizeCallback(window, FrameBufferResizeCallback);
+	glfwSetKeyCallback(window, ProcessKeyInput);
+	glfwSetMouseButtonCallback(window, ProcessMouseInput);
 }
 
 void VulkanApplication::Init()
@@ -39,7 +42,7 @@ void VulkanApplication::Init()
 	CreatePipelineCache();
 	CreateVisBuffWritePipeline();
 	CreateVisBuffShadePipeline();
-	chaletTexture.Create(TEXTURE_PATH, allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
+	terrainTexture.Create(TEXTURE_PATH, allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 	CreateDepthSampler();
 	//chalet.LoadFromFile(MODEL_PATH);
 	terrain.Generate(glm::vec3(0.0f), 1.0f, 1.0f);
@@ -60,7 +63,16 @@ void VulkanApplication::Update()
 	while (!glfwWindowShouldClose(window))
 	{
 		glfwPollEvents();
+		UpdateMouse();
+		
+		// Draw frame and calculate frame time
+		auto frameStart = std::chrono::high_resolution_clock::now();
 		DrawFrame();
+		auto frameEnd = std::chrono::high_resolution_clock::now();
+		auto diff = std::chrono::duration<double, std::milli>(frameEnd - frameStart).count();
+		frameTime = (float)diff / 1000.0f;
+
+		camera.Update(frameTime);
 	}
 
 	// Wait for the device to finish up any operations when exiting the main loop
@@ -72,7 +84,7 @@ void VulkanApplication::CleanUp()
 	CleanUpSwapChain();
 
 	// Destroy texture objects
-	chaletTexture.CleanUp(allocator, vulkan->Device());
+	terrainTexture.CleanUp(allocator, vulkan->Device());
 	vkDestroySampler(vulkan->Device(), depthSampler, nullptr);
 	visibilityBuffer.visibility.CleanUp(allocator, vulkan->Device());
 	debugAttachment.CleanUp(allocator, vulkan->Device());
@@ -107,6 +119,74 @@ void VulkanApplication::CleanUp()
 	// Destroy window and terminate glfw
 	glfwDestroyWindow(window);
 	glfwTerminate();
+}
+#pragma endregion
+
+#pragma region Input Functions
+// Callback used by glfw when keyboard or mouse input is recieved
+void VulkanApplication::ProcessKeyInput(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	// Get vulkan app instance from window user pointer
+	void *data = glfwGetWindowUserPointer(window);
+	VulkanApplication* vulkanApp = static_cast<VulkanApplication*>(data);
+
+	if (key == GLFW_KEY_W)
+	{
+		if (action == GLFW_PRESS)
+			vulkanApp->camera.input.forward = true;
+		else if (action == GLFW_RELEASE)
+			vulkanApp->camera.input.forward = false;
+	}
+	if (key == GLFW_KEY_S)
+	{
+		if (action == GLFW_PRESS)
+			vulkanApp->camera.input.back = true;
+		else if (action == GLFW_RELEASE)
+			vulkanApp->camera.input.back = false;
+	}
+	if (key == GLFW_KEY_A)
+	{
+		if (action == GLFW_PRESS)
+			vulkanApp->camera.input.left = true;
+		else if (action == GLFW_RELEASE)
+			vulkanApp->camera.input.left = false;
+	}
+	if (key == GLFW_KEY_D)
+	{
+		if (action == GLFW_PRESS)
+			vulkanApp->camera.input.right = true;
+		else if (action == GLFW_RELEASE)
+			vulkanApp->camera.input.right = false;
+	}
+	if (key == GLFW_KEY_R && action == GLFW_PRESS)
+		vulkanApp->camera.Reset();
+}
+
+void VulkanApplication::ProcessMouseInput(GLFWwindow* window, int button, int action, int mods)
+{
+	// Get vulkan app instance from window user pointer
+	void *data = glfwGetWindowUserPointer(window);
+	VulkanApplication* vulkanApp = static_cast<VulkanApplication*>(data);	
+
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+		vulkanApp->mouseLeftDown = true;
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+		vulkanApp->mouseLeftDown = false;	
+}
+
+void VulkanApplication::UpdateMouse()
+{
+	double xPos, yPos;
+	glfwGetCursorPos(window, &xPos, &yPos);
+	int deltaX = (int)mousePosition.x - (int)xPos;
+	int deltaY = (int)mousePosition.y - (int)yPos; 
+	
+	if (mouseLeftDown)
+	{
+		camera.Rotate(glm::vec3(-deltaY * camera.rotateSpeed, -deltaX * camera.rotateSpeed, 0.0f));
+	}
+
+	mousePosition = { xPos, yPos };
 }
 #pragma endregion
 
@@ -670,9 +750,9 @@ VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& co
 #pragma region Drawing Functions
 void VulkanApplication::InitCamera()
 {
-	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 10.0f);
-	camera.SetPosition(glm::vec3(0.0f, 0.0f, -2.0f));
-	camera.SetRotation(glm::vec3(0.0f, 0.0f, 0.0f));
+	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 10.0f, true);
+	camera.SetPosition(glm::vec3(0.0f, 0.0f, -2.0f), true);
+	camera.SetRotation(glm::vec3(0.0f, 0.0f, 0.0f), true);
 }
 
 void VulkanApplication::CreateFrameBuffers()
@@ -1451,14 +1531,14 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		// Model diffuse texture
 		VkDescriptorImageInfo modelTextureInfo = {};
 		modelTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		modelTextureInfo.imageView = chaletTexture.GetImage().ImageView();
-		modelTextureInfo.sampler = chaletTexture.Sampler();
+		modelTextureInfo.imageView = terrainTexture.GetImage().ImageView();
+		modelTextureInfo.sampler = terrainTexture.Sampler();
 
 		// Visibility Buffer
 		VkDescriptorImageInfo visBufferInfo = {};
 		visBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		visBufferInfo.imageView = visibilityBuffer.visibility.ImageView();
-		visBufferInfo.sampler = chaletTexture.Sampler();
+		visBufferInfo.sampler = terrainTexture.Sampler();
 
 		// Model UBO
 		mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);

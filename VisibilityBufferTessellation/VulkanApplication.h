@@ -21,7 +21,7 @@
 const int WIDTH = 800;
 const int HEIGHT = 600;
 const std::string MODEL_PATH = "models/chalet.obj";
-const std::string TEXTURE_PATH = "textures/chalet.jpg";
+const std::string TEXTURE_PATH = "textures/texture.png";
 const VkBool32 WIREFRAME = VK_FALSE;
 const VkClearColorValue CLEAR_COLOUR = { 0.7f, 0.3f, 0.25f, 1.0f };
 #pragma endregion
@@ -65,6 +65,12 @@ namespace vbt
 		void Init();
 		void Update();
 		void CleanUp();
+#pragma endregion
+
+#pragma region Input Functions
+		static void ProcessKeyInput(GLFWwindow* window, int key, int scancode, int action, int mods);
+		static void ProcessMouseInput(GLFWwindow* window, int button, int action, int mods);
+		void UpdateMouse();
 #pragma endregion
 
 #pragma region Presentation and Swap Chain Functions
@@ -155,6 +161,7 @@ namespace vbt
 		VkSemaphore visBuffWriteSemaphore;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;
+		float frameTime = 0.0f;
 #pragma endregion
 
 #pragma region Command Buffer Objects
@@ -176,7 +183,7 @@ namespace vbt
 #pragma endregion
 
 #pragma region Texture Objects 
-		Texture chaletTexture;
+		Texture terrainTexture;
 		VkSampler depthSampler;
 #pragma endregion
 
@@ -191,6 +198,11 @@ namespace vbt
 		VkDescriptorSetLayout shadePassDescriptorSetLayout;
 		VkDescriptorSet writePassDescriptorSet;
 		VkDescriptorSetLayout writePassDescriptorSetLayout;
+#pragma endregion
+
+#pragma region Input Objects
+		glm::vec2 mousePosition = glm::vec3();
+		bool mouseLeftDown = false;
 #pragma endregion
 
 #pragma region Debug Objects
