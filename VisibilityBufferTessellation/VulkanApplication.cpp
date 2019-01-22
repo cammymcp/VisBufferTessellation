@@ -1341,7 +1341,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		visibilityBuffer.visibility.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		visibilityBuffer.visibility.SetupDescriptorWriteSet(shadePassDescriptorSets[i], 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
-		// Model UBO
+		// Terrain UBO
 		mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
 		mvpUniformBuffer.SetupDescriptorWriteSet(shadePassDescriptorSets[i], 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
@@ -1389,54 +1389,26 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 		throw std::runtime_error("Failed to allocate write pass descriptor sets");
 	}
 
-	// Model UBO
+	// Terrain UBO
 	mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
+	mvpUniformBuffer.SetupDescriptorWriteSet(writePassDescriptorSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
 	// Create a descriptor write for each descriptor in the set
 	std::array<VkWriteDescriptorSet, 1> writePassDescriptorWrites = {};
 
-	// Binding 0: Vertex Shader Uniform Buffer of loaded model
-	writePassDescriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writePassDescriptorWrites[0].dstSet = writePassDescriptorSet;
-	writePassDescriptorWrites[0].dstBinding = 0;
-	writePassDescriptorWrites[0].dstArrayElement = 0;
-	writePassDescriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	writePassDescriptorWrites[0].descriptorCount = 1;
-	writePassDescriptorWrites[0].pBufferInfo = mvpUniformBuffer.DescriptorInfo();
+	// Binding 0: MVP Uniform Buffer of terrain
+	writePassDescriptorWrites[0] = mvpUniformBuffer.WriteDescriptorSet();
 
 	vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(writePassDescriptorWrites.size()), writePassDescriptorWrites.data(), 0, nullptr);
 }
 #pragma endregion
 
 #pragma region Other Functions
-std::vector<char> VulkanApplication::ReadFile(const std::string& filename)
-{
-	std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-	if (!file.is_open())
-	{
-		throw std::runtime_error("Failed to open file: " + filename);
-	}
-
-	// Get size of the file and create a buffer
-	size_t fileSize = (size_t)file.tellg();
-	std::vector<char> buffer(fileSize);
-
-	// Read all bytes
-	file.seekg(0);
-	file.read(buffer.data(), fileSize);
-	file.close();
-
-	return buffer;
-}
-
 void VulkanApplication::FrameBufferResizeCallback(GLFWwindow* window, int width, int height)
 {
 	auto app = reinterpret_cast<VulkanApplication*>(glfwGetWindowUserPointer(window));
 	app->framebufferResized = true;
 }
-
-
 #pragma endregion 
 
 } // namespace

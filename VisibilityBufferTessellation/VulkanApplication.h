@@ -3,7 +3,6 @@
 
 #include <array>
 #include <cstdlib>
-#include <fstream>
 #include <chrono>
 #include "vk_mem_alloc.h"
 #include "VulkanCore.h"
@@ -124,7 +123,6 @@ namespace vbt
 #pragma endregion
 
 #pragma region Other Functions
-		static std::vector<char> ReadFile(const std::string& filename);
 		static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 #pragma endregion
 

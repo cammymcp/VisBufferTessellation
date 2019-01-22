@@ -2,6 +2,7 @@
 #define HELPERFUNCTIONS_H
 
 #include "PhysicalDevice.h"
+#include <fstream>
 
 namespace vbt
 {
@@ -54,6 +55,27 @@ namespace vbt
 		vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
 		EndSingleTimeCommands(commandBuffer, device, physDevice, cmdPool);
+	}
+
+	static std::vector<char> ReadFile(const std::string& filename)
+	{
+		std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+		if (!file.is_open())
+		{
+			throw std::runtime_error("Failed to open file: " + filename);
+		}
+
+		// Get size of the file and create a buffer
+		size_t fileSize = (size_t)file.tellg();
+		std::vector<char> buffer(fileSize);
+
+		// Read all bytes
+		file.seekg(0);
+		file.read(buffer.data(), fileSize);
+		file.close();
+
+		return buffer;
 	}
 }
 
