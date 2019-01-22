@@ -21,7 +21,7 @@
 const int WIDTH = 800;
 const int HEIGHT = 600;
 const std::string MODEL_PATH = "models/chalet.obj";
-const std::string TEXTURE_PATH = "textures/texture.png";
+const std::string TEXTURE_PATH = "textures/grid.png";
 const VkBool32 WIREFRAME = VK_FALSE;
 const VkClearColorValue CLEAR_COLOUR = { 0.7f, 0.3f, 0.25f, 1.0f };
 #pragma endregion

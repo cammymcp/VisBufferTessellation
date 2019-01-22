@@ -76,10 +76,10 @@ void main()
 	debug = vec4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	// If this pixel doesn't contain triangle data, return early
-	if (length(visibilityRaw) != 0)
+	if (DrawIdTriId != 0)
 	{
 		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the number of draw call to which the triangle belongs
-		uint triangleID = (DrawIdTriId & 0x007FFFFF); // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID
+		uint triangleID = (DrawIdTriId & 0x007FFFFF) - 1; // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID
 		
 		// Index of the first vertex of this draw call's geometry
 		uint startIndex = drawID; // There's only one draw call at the moment, so drawID should always be 0
@@ -137,7 +137,7 @@ void main()
 	}
 	else
 	{
-		outColour = vec4(0.2f, 0.2f, 0.2f, 1.0f);
+		outColour = vec4(0.35f, 0.45f, 0.2f, 1.0f);
 	}
 
 }

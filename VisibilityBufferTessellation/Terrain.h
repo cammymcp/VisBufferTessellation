@@ -4,9 +4,9 @@
 #include "Mesh.h"
 #include "glm\glm.hpp"
 
-#define VERTEX_PER_SIDE 32
+#define QUAD_PER_SIDE 512
 #define VERTEX_OFFSET 0.1f
-#define UV_SCALE 1.0f
+#define UV_SCALE 10.0f
 
 namespace vbt
 {

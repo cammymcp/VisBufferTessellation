@@ -23,5 +23,5 @@ uint calculateOutputVBID(uint drawID, uint primitiveID)
 void main() 
 {
 	// Fill visibility buffer
-	visBuff = unpackUnorm4x8(calculateOutputVBID(drawID, gl_PrimitiveID));
+	visBuff = unpackUnorm4x8(calculateOutputVBID(drawID, gl_PrimitiveID + 1)); // Offset primitive ID so that the first primitive in each draw call is not lost due to being 0
 }

@@ -452,7 +452,7 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	rasterizer.polygonMode = WIREFRAME ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back faces
-	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
+	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
 	rasterizer.depthBiasEnable = VK_FALSE;
 	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
 	rasterizer.depthBiasClamp = 0.0f; // Optional
@@ -759,9 +759,9 @@ VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& co
 #pragma region Drawing Functions
 void VulkanApplication::InitCamera()
 {
-	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 100.0f, true);
-	camera.SetPosition(glm::vec3(0.0f, 0.0f, -2.0f), true);
+	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 500.0f, true);
 	camera.SetRotation(glm::vec3(0.0f, 0.0f, 0.0f), true);
+	camera.SetPosition(glm::vec3(0.0f, -5.0f, 0.0f), true);
 }
 
 void VulkanApplication::CreateFrameBuffers()
