@@ -65,4 +65,67 @@ namespace vbt
 			}
 		}
 	}
+
+	void Mesh::SetupIndexBufferDescriptor(VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
+	{
+		indexBuffer.SetupDescriptor(sizeof(indices[0]) * indices.size(), 0);
+		indexBuffer.SetupDescriptorWriteSet(dstSet, binding, type, count);
+	}
+
+	void Mesh::SetupAttributeBufferDescriptor(VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
+	{
+		attributeBuffer.SetupDescriptor(sizeof(vertexAttributeData[0]) * vertexAttributeData.size(), 0);
+		attributeBuffer.SetupDescriptorWriteSet(dstSet, binding, type, count);
+	}
+
+	void Mesh::CleanUp(VmaAllocator& allocator)
+	{
+		vertexBuffer.CleanUp(allocator);
+		indexBuffer.CleanUp(allocator);
+		attributeBuffer.CleanUp(allocator);
+	}
+
+	void Mesh::CreateBuffers(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool)
+	{
+		// Vertex Buffer
+		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+		Buffer stagingBuffer;
+		stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
+
+		// Map vertex data to staging buffer memory allocation
+		stagingBuffer.MapData(vertices.data(), allocator);
+
+		// Create vertex buffer on device local memory
+		vertexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
+
+		// Copy data to new vertex buffer
+		CopyBuffer(stagingBuffer.VkHandle(), vertexBuffer.VkHandle(), bufferSize, device, physDevice, cmdPool);
+
+		stagingBuffer.CleanUp(allocator);
+
+		// Index Buffer
+		bufferSize = sizeof(indices[0]) * indices.size();
+		stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
+
+		stagingBuffer.MapData(indices.data(), allocator);
+
+		indexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
+
+		CopyBuffer(stagingBuffer.VkHandle(), indexBuffer.VkHandle(), bufferSize, device, physDevice, cmdPool);
+
+		stagingBuffer.CleanUp(allocator);
+
+		// Attribute Buffer
+		bufferSize = sizeof(vertexAttributeData[0]) * vertexAttributeData.size();
+		stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
+
+		stagingBuffer.MapData(vertexAttributeData.data(), allocator);
+
+		attributeBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
+
+		CopyBuffer(stagingBuffer.VkHandle(), attributeBuffer.VkHandle(), bufferSize, device, physDevice, cmdPool);
+
+		// Clean up staging buffer
+		stagingBuffer.CleanUp(allocator);
+	}
 }

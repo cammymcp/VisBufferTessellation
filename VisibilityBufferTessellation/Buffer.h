@@ -11,10 +11,12 @@ namespace vbt
 		void Create(VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage allocUsage, VkMemoryPropertyFlags properties, VmaAllocator& allocator);
 		void MapData(void* data, VmaAllocator& allocator);
 		void SetupDescriptor(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
+		void SetupDescriptorWriteSet(VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count);
 		void CleanUp(VmaAllocator& allocator);
 
 		VkBuffer VkHandle() { return buffer; }
 		VkDescriptorBufferInfo* DescriptorInfo() { return &descriptor; }
+		VkWriteDescriptorSet WriteDescriptorSet() { return descriptorWriteSet; }
 
 	protected:
 		VkBuffer buffer;
@@ -24,7 +26,8 @@ namespace vbt
 		VkBufferUsageFlags usageFlags;
 		VkMemoryPropertyFlags propertyFlags;
 		VmaMemoryUsage allocationUsage; 
-		VkDescriptorBufferInfo descriptor;
+		VkDescriptorBufferInfo descriptor; 
+		VkWriteDescriptorSet descriptorWriteSet;
 	};
 }
 

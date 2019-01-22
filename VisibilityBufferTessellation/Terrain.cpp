@@ -1,8 +1,24 @@
 #include "Terrain.h"
+#include "VbtUtils.h"
 
 namespace vbt
 {
-	void Terrain::Generate(glm::vec3 origin, float width, float length)
+	void Terrain::Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool)
+	{
+		texture.Create(TEXTURE_PATH, allocator, device, physDevice, cmdPool);
+
+		Generate();
+
+		CreateBuffers(allocator, device, physDevice, cmdPool);
+	}
+
+	void Terrain::CleanUp(VmaAllocator& allocator, VkDevice device)
+	{
+		this->Mesh::CleanUp(allocator);
+		texture.CleanUp(allocator, device);
+	}
+
+	void Terrain::Generate()
 	{
 		// Generate vertices
 		for (auto x = 0; x < QUAD_PER_SIDE; x++)

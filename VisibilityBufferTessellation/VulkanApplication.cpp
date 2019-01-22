@@ -37,13 +37,9 @@ void VulkanApplication::Init()
 	CreatePipelineCache();
 	CreateVisBuffWritePipeline();
 	CreateVisBuffShadePipeline();
-	terrainTexture.Create(TEXTURE_PATH, allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
+	terrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 	CreateDepthSampler();
 	//chalet.LoadFromFile(MODEL_PATH);
-	terrain.Generate(glm::vec3(0.0f), 1.0f, 1.0f);
-	CreateVertexBuffer();
-	CreateAttributeBuffer();
-	CreateIndexBuffer();
 	CreateUniformBuffers();
 	CreateDescriptorPool();
 	CreateFrameBuffers();
@@ -79,7 +75,6 @@ void VulkanApplication::CleanUp()
 	CleanUpSwapChain();
 
 	// Destroy texture objects
-	terrainTexture.CleanUp(allocator, vulkan->Device());
 	vkDestroySampler(vulkan->Device(), depthSampler, nullptr);
 	visibilityBuffer.visibility.CleanUp(allocator, vulkan->Device());
 	debugAttachment.CleanUp(allocator, vulkan->Device());
@@ -95,9 +90,7 @@ void VulkanApplication::CleanUp()
 	mvpUniformBuffer.CleanUp(allocator);
 
 	// Destroy vertex and index buffers
-	vertexBuffer.CleanUp(allocator);
-	indexBuffer.CleanUp(allocator);
-	vertexAttributeBuffer.CleanUp(allocator);
+	terrain.CleanUp(allocator, vulkan->Device());
 	vmaDestroyAllocator(allocator);
 
 	// Destroy geometry pass semaphore
@@ -1081,9 +1074,9 @@ void VulkanApplication::RecordVisBuffWriteCommandBuffer()
 
 	// Bind geometry buffers
 	VkDeviceSize offsets[1] = { 0 };
-	VkBuffer vertexBuffers[] = { vertexBuffer.VkHandle() };
+	VkBuffer vertexBuffers[] = { terrain.VertexBuffer().VkHandle() };
 	vkCmdBindVertexBuffers(visBuffWriteCommandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindIndexBuffer(visBuffWriteCommandBuffer, indexBuffer.VkHandle(), 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindIndexBuffer(visBuffWriteCommandBuffer, terrain.IndexBuffer().VkHandle(), 0, VK_INDEX_TYPE_UINT32);
 
 	// Draw using index buffer
 	vkCmdDrawIndexed(visBuffWriteCommandBuffer, SCAST_U32(terrain.Indices().size()), 1, 0, 0, 0);
@@ -1095,43 +1088,6 @@ void VulkanApplication::RecordVisBuffWriteCommandBuffer()
 	{
 		throw std::runtime_error("Failed to record vis buff write command buffer");
 	}
-}
-
-VkCommandBuffer VulkanApplication::BeginSingleTimeCommands()
-{
-	// Set up a command buffer to perform the data transfer
-	VkCommandBufferAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
-	allocInfo.commandBufferCount = 1;
-
-	VkCommandBuffer commandBuffer;
-	vkAllocateCommandBuffers(vulkan->Device(), &allocInfo, &commandBuffer);
-
-	// Begin recording
-	VkCommandBufferBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-	return commandBuffer;
-}
-
-void VulkanApplication::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
-{
-	vkEndCommandBuffer(commandBuffer);
-
-	// Now execute the command buffer
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-
-	vkQueueSubmit(vulkan->PhysDevice().Queues()->graphics, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(vulkan->PhysDevice().Queues()->graphics); // Maybe use a fence here if performing multiple transfers, allowing driver to optimise
-
-	vkFreeCommandBuffers(vulkan->Device(), commandPool, 1, &commandBuffer);
 }
 #pragma endregion
 
@@ -1188,84 +1144,6 @@ VkFormat VulkanApplication::FindSupportedFormat(const std::vector<VkFormat>& can
 #pragma endregion
 
 #pragma region Buffer Functions
-void VulkanApplication::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage allocUsage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VmaAllocation& allocation)
-{
-	// Specify buffer info
-	VkBufferCreateInfo bufferInfo = {};
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = size;
-	bufferInfo.usage = usage;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	// Specify memory allocation Info
-	VmaAllocationCreateInfo allocInfo = {};
-	allocInfo.usage = allocUsage;
-	allocInfo.requiredFlags = properties;
-
-	// Create buffer
-	if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &buffer, &allocation, nullptr) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create vertex buffer");
-	}
-}
-
-void VulkanApplication::CreateVertexBuffer()
-{
-	// Create staging buffer on host memory
-	VkDeviceSize bufferSize = sizeof(terrain.Vertices()[0]) * terrain.Vertices().size();
-	Buffer stagingBuffer;
-	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
-
-	// Map vertex data to staging buffer memory allocation
-	stagingBuffer.MapData(terrain.Vertices().data(), allocator);
-
-	// Create vertex buffer on device local memory
-	vertexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
-
-	// Copy data to new vertex buffer
-	CopyBuffer(stagingBuffer.VkHandle(), vertexBuffer.VkHandle(), bufferSize);
-
-	stagingBuffer.CleanUp(allocator);
-}
-
-void VulkanApplication::CreateAttributeBuffer()
-{
-	// Create staging buffer on host memory
-	VkDeviceSize bufferSize = sizeof(terrain.PackedVertexAttributes()[0]) * terrain.PackedVertexAttributes().size();
-	Buffer stagingBuffer;
-	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
-
-	// Map attribute data to staging buffer memory allocation
-	stagingBuffer.MapData(terrain.PackedVertexAttributes().data(), allocator);
-
-	// Create attribute buffer on device local memory
-	vertexAttributeBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
-
-	// Copy data to new attribute buffer
-	CopyBuffer(stagingBuffer.VkHandle(), vertexAttributeBuffer.VkHandle(), bufferSize);
-
-	stagingBuffer.CleanUp(allocator);
-}
-
-void VulkanApplication::CreateIndexBuffer()
-{
-	// Create staging buffer on host memory
-	VkDeviceSize bufferSize = sizeof(terrain.Indices()[0]) * terrain.Indices().size();
-	Buffer stagingBuffer;
-	stagingBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
-
-	// Map index data to staging buffer memory allocation
-	stagingBuffer.MapData(terrain.Indices().data(), allocator);
-
-	// Create index buffer on device local memory
-	indexBuffer.Create(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
-
-	// Copy data to new index buffer
-	CopyBuffer(stagingBuffer.VkHandle(), indexBuffer.VkHandle(), bufferSize);
-
-	stagingBuffer.CleanUp(allocator);
-}
-
 void VulkanApplication::CreateUniformBuffers()
 {
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
@@ -1296,18 +1174,6 @@ void VulkanApplication::UpdateMVPUniformBuffer()
 
 	// Now map the memory to uniform buffer
 	mvpUniformBuffer.MapData(&ubo, allocator);
-}
-
-void VulkanApplication::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
-{
-	VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-	// Copy the data
-	VkBufferCopy copyRegion = {};
-	copyRegion.size = size;
-	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
-	EndSingleTimeCommands(commandBuffer);
 }
 
 void VulkanApplication::CreateVmaAllocator()
@@ -1468,23 +1334,21 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		// Model diffuse texture
 		VkDescriptorImageInfo modelTextureInfo = {};
 		modelTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		modelTextureInfo.imageView = terrainTexture.GetImage().ImageView();
-		modelTextureInfo.sampler = terrainTexture.Sampler();
+		modelTextureInfo.imageView = terrain.GetTexture().GetImage().ImageView();
+		modelTextureInfo.sampler = terrain.GetTexture().Sampler();
 
 		// Visibility Buffer
 		VkDescriptorImageInfo visBufferInfo = {};
 		visBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		visBufferInfo.imageView = visibilityBuffer.visibility.ImageView();
-		visBufferInfo.sampler = terrainTexture.Sampler();
+		visBufferInfo.sampler = terrain.GetTexture().Sampler();
 
 		// Model UBO
 		mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
+		mvpUniformBuffer.SetupDescriptorWriteSet(shadePassDescriptorSets[i], 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
-		// Index Buffer
-		indexBuffer.SetupDescriptor(sizeof(terrain.Indices()[0]) * terrain.Indices().size(), 0);
-
-		// Vertex Attribute Buffer
-		vertexAttributeBuffer.SetupDescriptor(sizeof(terrain.PackedVertexAttributes()[0]) * terrain.PackedVertexAttributes().size(), 0);
+		terrain.SetupIndexBufferDescriptor(shadePassDescriptorSets[i], 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
+		terrain.SetupAttributeBufferDescriptor(shadePassDescriptorSets[i], 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
 
 		// Create a descriptor write for each descriptor in the set
 		std::array<VkWriteDescriptorSet, 5> shadePassDescriptorWrites = {};
@@ -1508,31 +1372,13 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		shadePassDescriptorWrites[1].pImageInfo = &visBufferInfo;
 
 		// Binding 2: Vertex Shader Uniform Buffer of loaded model
-		shadePassDescriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		shadePassDescriptorWrites[2].dstSet = shadePassDescriptorSets[i];
-		shadePassDescriptorWrites[2].dstBinding = 2;
-		shadePassDescriptorWrites[2].dstArrayElement = 0;
-		shadePassDescriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		shadePassDescriptorWrites[2].descriptorCount = 1;
-		shadePassDescriptorWrites[2].pBufferInfo = mvpUniformBuffer.DescriptorInfo();
+		shadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
 
 		// Binding 3: Index Buffer
-		shadePassDescriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		shadePassDescriptorWrites[3].dstSet = shadePassDescriptorSets[i];
-		shadePassDescriptorWrites[3].dstBinding = 3;
-		shadePassDescriptorWrites[3].dstArrayElement = 0;
-		shadePassDescriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		shadePassDescriptorWrites[3].descriptorCount = 1;
-		shadePassDescriptorWrites[3].pBufferInfo = indexBuffer.DescriptorInfo();
+		shadePassDescriptorWrites[3] = terrain.IndexBuffer().WriteDescriptorSet();
 
 		// Binding 4: Vertex Attribute Buffer
-		shadePassDescriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		shadePassDescriptorWrites[4].dstSet = shadePassDescriptorSets[i];
-		shadePassDescriptorWrites[4].dstBinding = 4;
-		shadePassDescriptorWrites[4].dstArrayElement = 0;
-		shadePassDescriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		shadePassDescriptorWrites[4].descriptorCount = 1;
-		shadePassDescriptorWrites[4].pBufferInfo = vertexAttributeBuffer.DescriptorInfo();
+		shadePassDescriptorWrites[4] = terrain.AttributeBuffer().WriteDescriptorSet();
 
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(shadePassDescriptorWrites.size()), shadePassDescriptorWrites.data(), 0, nullptr);
 	}

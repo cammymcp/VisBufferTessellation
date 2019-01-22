@@ -46,6 +46,17 @@ namespace vbt
 		descriptor.range = size;
 	}
 
+	void Buffer::SetupDescriptorWriteSet(VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
+	{
+		descriptorWriteSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWriteSet.dstSet = dstSet;
+		descriptorWriteSet.dstBinding = binding;
+		descriptorWriteSet.dstArrayElement = 0;
+		descriptorWriteSet.descriptorType = type;
+		descriptorWriteSet.descriptorCount = count;
+		descriptorWriteSet.pBufferInfo = &descriptor;
+	}
+
 	void Buffer::CleanUp(VmaAllocator& allocator)
 	{
 		// Free memory and destroy buffer object

@@ -43,6 +43,18 @@ namespace vbt
 
 		vkFreeCommandBuffers(device, cmdPool, 1, &commandBuffer);
 	}
+
+	static void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkDevice& device, PhysicalDevice& physDevice, VkCommandPool& cmdPool)
+	{
+		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(device, cmdPool);
+
+		// Copy the data
+		VkBufferCopy copyRegion = {};
+		copyRegion.size = size;
+		vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+		EndSingleTimeCommands(commandBuffer, device, physDevice, cmdPool);
+	}
 }
 
 #endif // !HELPERFUNCTIONS_H

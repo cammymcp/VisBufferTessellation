@@ -2,6 +2,7 @@
 #define MESH_H
 
 #include "Buffer.h"
+#include "PhysicalDevice.h"
 #include "vk_mem_alloc.h"
 #include <cstdlib>
 #include <array>
@@ -76,18 +77,29 @@ struct VertexAttributes
 };
 #pragma endregion
 
-namespace vbt
+namespace vbt 
 {
 	class Mesh
 	{
 	public:
 		void LoadFromFile(std::string path);
+		void SetupIndexBufferDescriptor(VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count);
+		void SetupAttributeBufferDescriptor(VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count);
+		void CleanUp(VmaAllocator& allocator);
 
+		Buffer VertexBuffer() const { return vertexBuffer; }
+		Buffer IndexBuffer() const { return indexBuffer; }
+		Buffer AttributeBuffer() const { return attributeBuffer; }
 		std::vector<Vertex> Vertices() const { return vertices; }
 		std::vector<uint32_t> Indices() const { return indices; }
 		std::vector<VertexAttributes> PackedVertexAttributes() const { return vertexAttributeData; }
 		
 	protected:
+		void CreateBuffers(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool); 
+		
+		Buffer vertexBuffer;
+		Buffer indexBuffer;
+		Buffer attributeBuffer;
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
 		std::vector<VertexAttributes> vertexAttributeData;
