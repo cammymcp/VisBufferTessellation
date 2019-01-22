@@ -56,6 +56,50 @@ namespace vbt
 		}
 	}
 
+	void Image::CreateSampler(VkDevice device)
+	{
+		VkSamplerCreateInfo samplerInfo = {};
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.magFilter = VK_FILTER_LINEAR; // Apply linear interpolation to over/under-sampled texels
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.anisotropyEnable = VK_TRUE; // Enable anisotropic filtering 
+		samplerInfo.maxAnisotropy = 16;
+		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE; // Clamp texel coordinates to [0, 1]
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0.0f;
+		samplerInfo.minLod = 0.0f;
+		samplerInfo.maxLod = 0.0f;
+
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
+		{
+			throw std::runtime_error("Failed to create texture sampler");
+		}
+	}
+
+	void Image::SetUpDescriptorInfo(VkImageLayout layout)
+	{
+		descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		descriptor.imageView = imageView;
+		descriptor.sampler = sampler;
+	}
+
+	void Image::SetupDescriptorWriteSet(VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
+	{
+		writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeDescriptorSet.dstSet = dstSet;
+		writeDescriptorSet.dstBinding = binding;
+		writeDescriptorSet.dstArrayElement = 0;
+		writeDescriptorSet.descriptorType = type;
+		writeDescriptorSet.descriptorCount = count;
+		writeDescriptorSet.pImageInfo = &descriptor;
+	}
+
 	void Image::TransitionLayout(VkImageLayout srcLayout, VkImageLayout dstLayout, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool) 
 	{
 		VkCommandBuffer commandBuffer = BeginSingleTimeCommands(device, cmdPool);
@@ -158,6 +202,7 @@ namespace vbt
 
 	void Image::CleanUp(VmaAllocator& allocator, VkDevice device)
 	{
+		vkDestroySampler(device, sampler, nullptr);
 		vkDestroyImageView(device, imageView, nullptr);
 		vmaDestroyImage(allocator, image, imageMemory);
 	}

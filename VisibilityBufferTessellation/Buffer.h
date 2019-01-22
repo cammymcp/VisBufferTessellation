@@ -16,7 +16,7 @@ namespace vbt
 
 		VkBuffer VkHandle() { return buffer; }
 		VkDescriptorBufferInfo* DescriptorInfo() { return &descriptor; }
-		VkWriteDescriptorSet WriteDescriptorSet() { return descriptorWriteSet; }
+		VkWriteDescriptorSet WriteDescriptorSet() const { return descriptorWriteSet; }
 
 	protected:
 		VkBuffer buffer;

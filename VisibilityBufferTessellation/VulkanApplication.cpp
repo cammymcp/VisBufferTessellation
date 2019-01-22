@@ -1312,6 +1312,9 @@ void VulkanApplication::CreateWritePassDescriptorSetLayout()
 // Create the descriptor sets for the shade pass, containing the visibility buffer images (for each swapchain image)
 void VulkanApplication::CreateShadePassDescriptorSets()
 {
+	// Set up sampler for visibility buffer image
+	visibilityBuffer.visibility.CreateSampler(vulkan->Device());
+
 	// Create shade descriptor sets
 	std::vector<VkDescriptorSetLayout> shadingLayouts(vulkan->Swapchain().Images().size(), shadePassDescriptorSetLayout);
 
@@ -1331,53 +1334,37 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 	// Configure the descriptors
 	for (size_t i = 0; i < vulkan->Swapchain().Images().size(); i++)
 	{
-		// Model diffuse texture
-		VkDescriptorImageInfo modelTextureInfo = {};
-		modelTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		modelTextureInfo.imageView = terrain.GetTexture().GetImage().ImageView();
-		modelTextureInfo.sampler = terrain.GetTexture().Sampler();
+		// Terrain texture sampler
+		terrain.SetupTextureDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, shadePassDescriptorSets[i], 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
-		// Visibility Buffer
-		VkDescriptorImageInfo visBufferInfo = {};
-		visBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		visBufferInfo.imageView = visibilityBuffer.visibility.ImageView();
-		visBufferInfo.sampler = terrain.GetTexture().Sampler();
+		// Visibility Buffer sampler
+		visibilityBuffer.visibility.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		visibilityBuffer.visibility.SetupDescriptorWriteSet(shadePassDescriptorSets[i], 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
 		// Model UBO
 		mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
 		mvpUniformBuffer.SetupDescriptorWriteSet(shadePassDescriptorSets[i], 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
+		// Terrain buffers
 		terrain.SetupIndexBufferDescriptor(shadePassDescriptorSets[i], 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
 		terrain.SetupAttributeBufferDescriptor(shadePassDescriptorSets[i], 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
 
 		// Create a descriptor write for each descriptor in the set
 		std::array<VkWriteDescriptorSet, 5> shadePassDescriptorWrites = {};
 
-		// Binding 0: Model texture sampler
-		shadePassDescriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		shadePassDescriptorWrites[0].dstSet = shadePassDescriptorSets[i];
-		shadePassDescriptorWrites[0].dstBinding = 0;
-		shadePassDescriptorWrites[0].dstArrayElement = 0;
-		shadePassDescriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		shadePassDescriptorWrites[0].descriptorCount = 1;
-		shadePassDescriptorWrites[0].pImageInfo = &modelTextureInfo;
+		// Binding 0: Terrain texture sampler
+		shadePassDescriptorWrites[0] = terrain.GetTexture().WriteDescriptorSet();
 
-		// Binding 1: Visibility Buffer
-		shadePassDescriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		shadePassDescriptorWrites[1].dstSet = shadePassDescriptorSets[i];
-		shadePassDescriptorWrites[1].dstBinding = 1;
-		shadePassDescriptorWrites[1].dstArrayElement = 0;
-		shadePassDescriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		shadePassDescriptorWrites[1].descriptorCount = 1;
-		shadePassDescriptorWrites[1].pImageInfo = &visBufferInfo;
+		// Binding 1: Visibility Buffer sampler
+		shadePassDescriptorWrites[1] = visibilityBuffer.visibility.WriteDescriptorSet();
 
-		// Binding 2: Vertex Shader Uniform Buffer of loaded model
+		// Binding 2: MVP Uniform Buffer of terrain
 		shadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
 
-		// Binding 3: Index Buffer
+		// Binding 3: Terrain Index Buffer
 		shadePassDescriptorWrites[3] = terrain.IndexBuffer().WriteDescriptorSet();
 
-		// Binding 4: Vertex Attribute Buffer
+		// Binding 4: Terrain Vertex Attribute Buffer
 		shadePassDescriptorWrites[4] = terrain.AttributeBuffer().WriteDescriptorSet();
 
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(shadePassDescriptorWrites.size()), shadePassDescriptorWrites.data(), 0, nullptr);

@@ -18,7 +18,9 @@ namespace vbt
 	{
 	public:
 		void Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool);
+		void SetupTextureDescriptor(VkImageLayout layout, VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count);
 		void CleanUp(VmaAllocator& allocator, VkDevice device);
+
 		Texture GetTexture() { return texture; } 
 
 	private:

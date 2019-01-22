@@ -5,11 +5,17 @@ namespace vbt
 {
 	void Terrain::Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool)
 	{
-		texture.Create(TEXTURE_PATH, allocator, device, physDevice, cmdPool);
+		texture.LoadAndCreate(TEXTURE_PATH, allocator, device, physDevice, cmdPool);
 
 		Generate();
 
 		CreateBuffers(allocator, device, physDevice, cmdPool);
+	}
+
+	void Terrain::SetupTextureDescriptor(VkImageLayout layout, VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
+	{
+		texture.SetUpDescriptorInfo(layout);
+		texture.SetupDescriptorWriteSet(dstSet, binding, type, count);
 	}
 
 	void Terrain::CleanUp(VmaAllocator& allocator, VkDevice device)

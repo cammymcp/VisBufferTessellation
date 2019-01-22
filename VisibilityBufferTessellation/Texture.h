@@ -6,21 +6,11 @@
 
 namespace vbt
 {
-	class Texture
+	// At the moment just a wrapper class for Image to allow loading data from file, may want to extend later
+	class Texture: public Image
 	{
 	public:
-		void Create(std::string path, VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool);
-		void CleanUp(VmaAllocator& allocator, VkDevice device);
-
-		Image GetImage() { return image; }
-		VkSampler Sampler() { return sampler; }
-
-	protected:
-		void CreateSampler(VkDevice device);
-
-		Image image;
-		VkSampler sampler;
-		VkDescriptorImageInfo descriptor;
+		void LoadAndCreate(std::string path, VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool);
 	};
 }
 
