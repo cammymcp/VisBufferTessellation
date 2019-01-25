@@ -44,6 +44,6 @@ namespace vbt
 
 		// Now create the image view and the sampler
 		CreateImageView(device, VK_IMAGE_ASPECT_COLOR_BIT);
-		CreateSampler(device);
+		CreateSampler(device, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 	}
 }

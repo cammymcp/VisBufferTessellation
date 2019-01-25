@@ -12,9 +12,9 @@ namespace vbt
 	public:
 		void Create(uint32_t imageWidth, uint32_t imageHeight, VkFormat imageFormat, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkMemoryPropertyFlags properties, VmaAllocator& allocator);
 		void CreateImageView(const VkDevice device, VkImageAspectFlags aspectFlags);
-		void CreateSampler(VkDevice device);
+		void CreateSampler(VkDevice device, VkSamplerAddressMode addressMode);
 		void SetUpDescriptorInfo(VkImageLayout layout);
-		void SetupDescriptorWriteSet(VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count);
+		void SetupDescriptorWriteSet(VkDescriptorSet& dstSet, uint32_t binding, VkDescriptorType type, uint32_t count);
 		void TransitionLayout(VkImageLayout srcLayout, VkImageLayout dstLayout, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool);
 		void CopyFromBuffer(VkBuffer buffer, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool);
 		void CleanUp(VmaAllocator& allocator, VkDevice device);

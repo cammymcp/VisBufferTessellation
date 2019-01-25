@@ -56,15 +56,15 @@ namespace vbt
 		}
 	}
 
-	void Image::CreateSampler(VkDevice device)
+	void Image::CreateSampler(VkDevice device, VkSamplerAddressMode addressMode)
 	{
 		VkSamplerCreateInfo samplerInfo = {};
 		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 		samplerInfo.magFilter = VK_FILTER_LINEAR; // Apply linear interpolation to over/under-sampled texels
 		samplerInfo.minFilter = VK_FILTER_LINEAR;
-		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeU = addressMode;
+		samplerInfo.addressModeV = addressMode;
+		samplerInfo.addressModeW = addressMode;
 		samplerInfo.anisotropyEnable = VK_TRUE; // Enable anisotropic filtering 
 		samplerInfo.maxAnisotropy = 16;
 		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
@@ -89,7 +89,7 @@ namespace vbt
 		descriptor.sampler = sampler;
 	}
 
-	void Image::SetupDescriptorWriteSet(VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
+	void Image::SetupDescriptorWriteSet(VkDescriptorSet& dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
 	{
 		writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		writeDescriptorSet.dstSet = dstSet;

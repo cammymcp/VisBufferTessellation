@@ -41,6 +41,7 @@ namespace vbt
 		PhysicalDevice PhysDevice() const { return physicalDevice; }
 		SwapChain Swapchain() const { return swapChain; }
 		VkDevice Device() const { return device; }
+		VkDevice* DevicePtr() { return &device; }
 		std::vector<VkSemaphore> ImageAvailableSemaphores() const { return imageAvailableSemaphores; }
 		std::vector<VkSemaphore> RenderFinishedSemaphores() const { return renderFinishedSemaphores; }
 		std::vector<VkFence> Fences() const { return inFlightFences; }

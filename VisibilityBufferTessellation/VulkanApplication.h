@@ -10,6 +10,7 @@
 #include "Terrain.h"
 #include "Texture.h"
 #include "Camera.h"
+#include "VbtImGUI.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // Ensure that GLM works in Vulkan's clip coordinates of 0.0 to 1.0
@@ -54,11 +55,15 @@ namespace vbt
 			CleanUp();
 		}
 
+		VulkanCore* GetVulkanCore() { return vulkan; }
+		const std::string title = "Visibility Buffer Tessellation";
+
 	private:
 		// Functions
 #pragma region Core Functions
 		void InitWindow();
 		void Init();
+		void InitImGui();
 		void Update();
 		void CleanUp();
 #pragma endregion
@@ -130,6 +135,7 @@ namespace vbt
 #pragma region Core Objects
 		GLFWwindow* window;
 		VulkanCore* vulkan;
+		ImGUI* imGui = nullptr;
 		Camera camera;
 #pragma endregion
 
@@ -187,6 +193,7 @@ namespace vbt
 #pragma region Input Objects
 		glm::vec2 mousePosition = glm::vec3();
 		bool mouseLeftDown = false;
+		bool mouseRightDown = false;
 #pragma endregion
 
 #pragma region Debug Objects

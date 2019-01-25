@@ -15,7 +15,7 @@ void VulkanApplication::InitWindow()
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 	// Create window
-	window = glfwCreateWindow(WIDTH, HEIGHT, "Visibility Buffer", nullptr, nullptr);
+	window = glfwCreateWindow(WIDTH, HEIGHT, title.c_str(), nullptr, nullptr);
 	glfwSetWindowUserPointer(window, this);
 	glfwSetFramebufferSizeCallback(window, FrameBufferResizeCallback);
 	glfwSetKeyCallback(window, ProcessKeyInput);
@@ -37,6 +37,7 @@ void VulkanApplication::Init()
 	CreatePipelineCache();
 	CreateVisBuffWritePipeline();
 	CreateVisBuffShadePipeline();
+	InitImGui();
 	terrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 	CreateDepthSampler();
 	//chalet.LoadFromFile(MODEL_PATH);
@@ -49,12 +50,23 @@ void VulkanApplication::Init()
 	RecordVisBuffWriteCommandBuffer();
 }
 
+void VulkanApplication::InitImGui()
+{
+	imGui = new ImGUI(this, &allocator);
+	imGui->Init((float)WIDTH, (float)HEIGHT);
+	imGui->CreateVulkanResources(vulkan->PhysDevice(), commandPool, visBuffShadeRenderPass, vulkan->PhysDevice().Queues()->graphics);
+}
+
 void VulkanApplication::Update()
 {
 	while (!glfwWindowShouldClose(window))
 	{
 		glfwPollEvents();
 		UpdateMouse();
+		
+		// Update ImGui
+		imGui->UpdateFrame();
+		imGui->UpdateBuffers();
 		
 		// Draw frame and calculate frame time
 		auto frameStart = std::chrono::high_resolution_clock::now();
@@ -91,6 +103,11 @@ void VulkanApplication::CleanUp()
 
 	// Destroy vertex and index buffers
 	terrain.CleanUp(allocator, vulkan->Device());
+
+	// Destroy ImGui resources and handle
+	imGui->CleanUp();
+	delete imGui;
+
 	vmaDestroyAllocator(allocator);
 
 	// Destroy geometry pass semaphore
@@ -174,6 +191,15 @@ void VulkanApplication::ProcessMouseInput(GLFWwindow* window, int button, int ac
 		vulkanApp->mouseLeftDown = true;
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
 		vulkanApp->mouseLeftDown = false;	
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+		vulkanApp->mouseRightDown = true;
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE)
+		vulkanApp->mouseRightDown = false;
+		
+	// Update imGui input
+	ImGuiIO& io = ImGui::GetIO();
+	io.MouseDown[0] = vulkanApp->mouseLeftDown;
+	io.MouseDown[1] = vulkanApp->mouseRightDown;
 }
 
 void VulkanApplication::UpdateMouse()
@@ -181,14 +207,18 @@ void VulkanApplication::UpdateMouse()
 	double xPos, yPos;
 	glfwGetCursorPos(window, &xPos, &yPos);
 	int deltaX = (int)mousePosition.x - (int)xPos;
-	int deltaY = (int)mousePosition.y - (int)yPos; 
+	int deltaY = (int)mousePosition.y - (int)yPos;
+	mousePosition = { xPos, yPos };
+
+	// Update imGui input
+	ImGuiIO& io = ImGui::GetIO();
+	io.DeltaTime = frameTime;
+	io.MousePos = ImVec2((float)xPos, (float)yPos);
 	
-	if (mouseLeftDown)
+	if (mouseRightDown)
 	{
 		camera.Rotate(glm::vec3(-deltaY * camera.rotateSpeed, -deltaX * camera.rotateSpeed, 0.0f));
 	}
-
-	mousePosition = { xPos, yPos };
 }
 #pragma endregion
 
@@ -947,6 +977,10 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 		throw std::runtime_error("Failed to allocate vis buffer shade command buffers");
 	}
 
+	// Update ImGui Once
+	imGui->UpdateFrame();
+	imGui->UpdateBuffers();
+
 	// Define clear values
 	std::array<VkClearValue, 3> clearValues = {};
 	clearValues[0].color = CLEAR_COLOUR;
@@ -999,6 +1033,8 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 
 		// Vertex shader calculates positions of fullscreen triangle based on index, so no need to bind vertex/index buffers to create a fullscreen quad
 		vkCmdDraw(visBuffShadeCommandBuffers[i], 3, 1, 0, 0);
+
+		imGui->DrawFrame(visBuffShadeCommandBuffers[i]);
 
 		// Now end the render pass
 		vkCmdEndRenderPass(visBuffShadeCommandBuffers[i]);
@@ -1313,7 +1349,7 @@ void VulkanApplication::CreateWritePassDescriptorSetLayout()
 void VulkanApplication::CreateShadePassDescriptorSets()
 {
 	// Set up sampler for visibility buffer image
-	visibilityBuffer.visibility.CreateSampler(vulkan->Device());
+	visibilityBuffer.visibility.CreateSampler(vulkan->Device(), VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
 	// Create shade descriptor sets
 	std::vector<VkDescriptorSetLayout> shadingLayouts(vulkan->Swapchain().Images().size(), shadePassDescriptorSetLayout);

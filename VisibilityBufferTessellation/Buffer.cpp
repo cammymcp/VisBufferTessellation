@@ -39,6 +39,25 @@ namespace vbt
 		vmaUnmapMemory(allocator, bufferMemory);
 	}
 
+	void Buffer::Flush(VmaAllocator& allocator, VkDeviceSize size, VkDeviceSize offset)
+	{
+		vmaFlushAllocation(allocator, bufferMemory, offset, size);
+	}
+
+	void Buffer::Map(VmaAllocator& allocator)
+	{
+		vmaMapMemory(allocator, bufferMemory, &mappedRange);
+	}
+
+	void Buffer::Unmap(VmaAllocator& allocator)
+	{
+		if (mappedRange)
+		{
+			vmaUnmapMemory(allocator, bufferMemory);
+			mappedRange = nullptr;
+		}
+	}
+
 	void Buffer::SetupDescriptor(VkDeviceSize size, VkDeviceSize offset)
 	{
 		descriptor.offset = offset;
@@ -60,6 +79,7 @@ namespace vbt
 	void Buffer::CleanUp(VmaAllocator& allocator)
 	{
 		// Free memory and destroy buffer object
+		Unmap(allocator);
 		vmaDestroyBuffer(allocator, buffer, bufferMemory);
 	}
 }
