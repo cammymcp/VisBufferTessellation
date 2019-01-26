@@ -63,9 +63,12 @@ namespace vbt
 #pragma region Core Functions
 		void InitWindow();
 		void Init();
-		void InitImGui();
 		void Update();
 		void CleanUp();
+#pragma endregion
+
+#pragma region ImGui Functions
+		void InitImGui();
 #pragma endregion
 
 #pragma region Input Functions
@@ -135,8 +138,11 @@ namespace vbt
 #pragma region Core Objects
 		GLFWwindow* window;
 		VulkanCore* vulkan;
-		ImGUI* imGui = nullptr;
 		Camera camera;
+#pragma endregion
+
+#pragma region ImGui Objects
+		ImGUI imGui;
 #pragma endregion
 
 #pragma region Graphics Pipeline Objects

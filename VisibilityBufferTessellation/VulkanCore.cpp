@@ -256,7 +256,7 @@ void VulkanCore::SetupDebugCallback()
 	createInfo.pfnUserCallback = DebugCallback;
 	createInfo.pUserData = nullptr; // Optional
 
-									// Set up object from external function
+	// Set up object from external function
 	if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &callback) != VK_SUCCESS)
 		throw std::runtime_error("Failed to setup debug callback!");
 }

@@ -72,6 +72,12 @@
     <ClCompile Include="VbtImGUI.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Libraries\imgui-master\examples\imgui_impl_glfw.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Libraries\imgui-master\examples\imgui_impl_vulkan.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="VulkanApplication.h">
@@ -133,6 +139,12 @@
     </ClInclude>
     <ClInclude Include="VbtImGUI.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Libraries\imgui-master\examples\imgui_impl_glfw.h">
+      <Filter>Header Files\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Libraries\imgui-master\examples\imgui_impl_vulkan.h">
+      <Filter>Header Files\ImGui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

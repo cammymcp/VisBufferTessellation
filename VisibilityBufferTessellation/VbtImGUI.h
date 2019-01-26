@@ -1,59 +1,44 @@
 #ifndef IMGUI_H
 #define IMGUI_H
 
-#include <vulkan\vulkan.h>
-#include <glm\glm.hpp>
+#include <array>
+
+#include "vulkan\vulkan.h"
 #include "vk_mem_alloc.h"
 #include "imgui.h"
-#include "Image.h"
-#include "Buffer.h"
+#include "imgui_impl_vulkan.h"
+#include "imgui_impl_glfw.h"
+#include "PhysicalDevice.h"
 
 namespace vbt
 {
-	// Forward declare VulkanApplication class
+	// Forward declarations
 	class VulkanApplication;
 
-	// Renders on-screen GUI via Dear ImGui library, based on Sascha Willem's implementation
+	// Renders on-screen GUI via Dear ImGui library
 	class ImGUI
 	{
 	public:
-		ImGUI(VulkanApplication* vulkanApp, VmaAllocator* allocator);
-		~ImGUI();
-
-		void Init(float width, float height);
-		void CreateVulkanResources(PhysicalDevice physDevice, VkCommandPool& cmdPool, VkRenderPass renderPass, VkQueue copyQueue);
-		void UpdateFrame();
-		void UpdateBuffers();
+		void Init(VulkanApplication* app, GLFWwindow* window, ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool);
+		void CreateVulkanResources(VulkanApplication* app);
+		void UpdateFrame(float frameTime);
 		void DrawFrame(VkCommandBuffer commandBuffer);
+		void AllocateCommandBuffers(VkDevice device, VkCommandPool commandPool, size_t numBuffers);
+		void UpdateCommandBuffer(int index);
 		void CleanUp();
 
+		std::vector<VkCommandBuffer> CommandBuffers() const { return commandBuffers; }
+		std::vector<VkSemaphore> Semaphores() const { return semaphores; }
 	private:
-		struct RenderParamsPushConstant
-		{
-			glm::vec2 scale;
-			glm::vec2 translate;
-		} renderParamsPushConstant;
-		VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
-		VulkanApplication* vulkanAppHandle;
-		VkDevice* deviceHandle;
-		VmaAllocator* allocatorHandle;
-
-		VkPipeline pipeline;
-		VkPipelineLayout pipelineLayout;
-		VkPipelineCache pipelineCache;
-
+		// Vulkan Objects
 		VkDescriptorPool descriptorPool;
-		VkDescriptorSet descriptorSet;
-		VkDescriptorSetLayout descriptorLayout;
-		
-		Image fontImage;
-		Buffer vertexBuffer;
-		Buffer indexBuffer;
-		uint32_t vertexCount = 0;
-		uint32_t indexCount = 0;
+		std::vector<VkCommandBuffer> commandBuffers;
+		std::vector<VkSemaphore> semaphores;
 
 		bool checkboxTest = false;
+		std::array<float, 50> frameTimes{};
+		float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
 	};
 }
 

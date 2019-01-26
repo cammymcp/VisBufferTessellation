@@ -37,7 +37,6 @@ void VulkanApplication::Init()
 	CreatePipelineCache();
 	CreateVisBuffWritePipeline();
 	CreateVisBuffShadePipeline();
-	InitImGui();
 	terrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 	CreateDepthSampler();
 	//chalet.LoadFromFile(MODEL_PATH);
@@ -46,15 +45,12 @@ void VulkanApplication::Init()
 	CreateFrameBuffers();
 	CreateShadePassDescriptorSets();
 	CreateWritePassDescriptorSet();
+	InitImGui();
 	RecordVisBuffShadeCommandBuffers();
 	RecordVisBuffWriteCommandBuffer();
-}
-
-void VulkanApplication::InitImGui()
-{
-	imGui = new ImGUI(this, &allocator);
-	imGui->Init((float)WIDTH, (float)HEIGHT);
-	imGui->CreateVulkanResources(vulkan->PhysDevice(), commandPool, visBuffShadeRenderPass, vulkan->PhysDevice().Queues()->graphics);
+	imGui.AllocateCommandBuffers(vulkan->Device(), commandPool, swapChainFramebuffers.size());
+	for (int i = 0; i < imGui.CommandBuffers().size(); i++)
+		imGui.UpdateCommandBuffer(i);
 }
 
 void VulkanApplication::Update()
@@ -63,10 +59,7 @@ void VulkanApplication::Update()
 	{
 		glfwPollEvents();
 		UpdateMouse();
-		
-		// Update ImGui
-		imGui->UpdateFrame();
-		imGui->UpdateBuffers();
+		imGui.UpdateFrame(frameTime);
 		
 		// Draw frame and calculate frame time
 		auto frameStart = std::chrono::high_resolution_clock::now();
@@ -104,9 +97,8 @@ void VulkanApplication::CleanUp()
 	// Destroy vertex and index buffers
 	terrain.CleanUp(allocator, vulkan->Device());
 
-	// Destroy ImGui resources and handle
-	imGui->CleanUp();
-	delete imGui;
+	// Destroy ImGui resources
+	imGui.CleanUp();
 
 	vmaDestroyAllocator(allocator);
 
@@ -124,6 +116,23 @@ void VulkanApplication::CleanUp()
 	// Destroy window and terminate glfw
 	glfwDestroyWindow(window);
 	glfwTerminate();
+}
+#pragma endregion
+
+#pragma region ImGui Functions
+void VulkanApplication::InitImGui()
+{
+	ImGui_ImplVulkan_InitInfo initInfo = {};
+	initInfo.Instance = vulkan->Instance();
+	initInfo.PhysicalDevice = vulkan->PhysDevice().VkHandle();
+	initInfo.Device = vulkan->Device();
+	initInfo.QueueFamily = PhysicalDevice::FindQueueFamilies(vulkan->PhysDevice().VkHandle(), vulkan->Swapchain().Surface()).graphicsFamily.value();
+	initInfo.Queue = vulkan->PhysDevice().Queues()->graphics;
+	initInfo.PipelineCache = pipelineCache;
+	initInfo.Allocator = nullptr;
+	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
+	imGui.Init(this, window, &initInfo, visBuffShadeRenderPass, commandPool);
+	imGui.UpdateFrame(0.0f); // Update imgui frame once to populate buffers
 }
 #pragma endregion
 
@@ -266,6 +275,7 @@ void VulkanApplication::CleanUpSwapChain()
 
 	// Free command buffers
 	vkFreeCommandBuffers(vulkan->Device(), commandPool, SCAST_U32(visBuffShadeCommandBuffers.size()), visBuffShadeCommandBuffers.data());
+	vkFreeCommandBuffers(vulkan->Device(), commandPool, SCAST_U32(imGui.CommandBuffers().size()), imGui.CommandBuffers().data());
 	vkFreeCommandBuffers(vulkan->Device(), commandPool, 1, &visBuffWriteCommandBuffer);
 	vkDestroyPipeline(vulkan->Device(), visBuffShadePipeline, nullptr);
 	vkDestroyPipeline(vulkan->Device(), visBuffWritePipeline, nullptr);
@@ -915,12 +925,28 @@ void VulkanApplication::DrawFrame()
 	}
 	/// =====================================================================================================
 
+	/// ImGui ===============================================================================================
+	// Wait for rendering to complete, signal present after imgui rendering
+	VkSemaphore imGuiSemaphore = imGui.Semaphores()[currentFrame];
+	submitInfo.pWaitSemaphores = &renderFinishedSemaphore;
+	submitInfo.pSignalSemaphores = &imGuiSemaphore;
+
+	// Submit to queue
+	imGui.UpdateCommandBuffer(imageIndex);
+	VkCommandBuffer imGuiCommandBuffer = imGui.CommandBuffers()[imageIndex];
+	submitInfo.pCommandBuffers = &imGuiCommandBuffer;
+	if (vkQueueSubmit(vulkan->PhysDevice().Queues()->graphics, 1, &submitInfo, vulkan->Fences()[currentFrame]) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to submit imGui command buffer");
+	}
+	/// =====================================================================================================
+
 	// Now submit the resulting image back to the swap chain
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &renderFinishedSemaphore; // Wait for shade pass to finish
+	presentInfo.pWaitSemaphores = &imGuiSemaphore; // Wait for imgui pass to finish
 
 	VkSwapchainKHR swapChains[] = { vulkan->Swapchain().VkHandle() };
 	presentInfo.swapchainCount = 1;
@@ -977,10 +1003,6 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 		throw std::runtime_error("Failed to allocate vis buffer shade command buffers");
 	}
 
-	// Update ImGui Once
-	imGui->UpdateFrame();
-	imGui->UpdateBuffers();
-
 	// Define clear values
 	std::array<VkClearValue, 3> clearValues = {};
 	clearValues[0].color = CLEAR_COLOUR;
@@ -1033,8 +1055,6 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 
 		// Vertex shader calculates positions of fullscreen triangle based on index, so no need to bind vertex/index buffers to create a fullscreen quad
 		vkCmdDraw(visBuffShadeCommandBuffers[i], 3, 1, 0, 0);
-
-		imGui->DrawFrame(visBuffShadeCommandBuffers[i]);
 
 		// Now end the render pass
 		vkCmdEndRenderPass(visBuffShadeCommandBuffers[i]);

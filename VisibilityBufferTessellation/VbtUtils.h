@@ -77,6 +77,14 @@ namespace vbt
 
 		return buffer;
 	}
+
+	static void ImGuiCheckVKResult(VkResult err)
+	{
+		if (err == 0) return;
+		printf("VkResult %d\n", err);
+		if (err < 0)
+			abort();
+	}
 }
 
 #endif // !HELPERFUNCTIONS_H

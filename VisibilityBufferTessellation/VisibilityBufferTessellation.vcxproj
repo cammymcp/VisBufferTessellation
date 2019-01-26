@@ -89,7 +89,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -106,7 +106,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -125,7 +125,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -146,7 +146,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -159,6 +159,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\Libraries\imgui-master\examples\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\..\Libraries\imgui-master\examples\imgui_impl_vulkan.cpp" />
     <ClCompile Include="..\..\Libraries\imgui-master\imgui.cpp" />
     <ClCompile Include="..\..\Libraries\imgui-master\imgui_demo.cpp" />
     <ClCompile Include="..\..\Libraries\imgui-master\imgui_draw.cpp" />
@@ -177,6 +179,8 @@
     <ClCompile Include="VulkanCore.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\Libraries\imgui-master\examples\imgui_impl_glfw.h" />
+    <ClInclude Include="..\..\Libraries\imgui-master\examples\imgui_impl_vulkan.h" />
     <ClInclude Include="..\..\Libraries\imgui-master\imconfig.h" />
     <ClInclude Include="..\..\Libraries\imgui-master\imgui.h" />
     <ClInclude Include="..\..\Libraries\imgui-master\imgui_internal.h" />
