@@ -204,11 +204,6 @@ void VulkanApplication::ProcessMouseInput(GLFWwindow* window, int button, int ac
 		vulkanApp->mouseRightDown = true;
 	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE)
 		vulkanApp->mouseRightDown = false;
-		
-	// Update imGui input
-	ImGuiIO& io = ImGui::GetIO();
-	io.MouseDown[0] = vulkanApp->mouseLeftDown;
-	io.MouseDown[1] = vulkanApp->mouseRightDown;
 }
 
 void VulkanApplication::UpdateMouse()
@@ -218,11 +213,6 @@ void VulkanApplication::UpdateMouse()
 	int deltaX = (int)mousePosition.x - (int)xPos;
 	int deltaY = (int)mousePosition.y - (int)yPos;
 	mousePosition = { xPos, yPos };
-
-	// Update imGui input
-	ImGuiIO& io = ImGui::GetIO();
-	io.DeltaTime = frameTime;
-	io.MousePos = ImVec2((float)xPos, (float)yPos);
 	
 	if (mouseRightDown)
 	{
