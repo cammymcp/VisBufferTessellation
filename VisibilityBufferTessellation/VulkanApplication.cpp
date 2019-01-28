@@ -1253,7 +1253,7 @@ void VulkanApplication::CreateDescriptorPool()
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[0].descriptorCount = SCAST_U32((vulkan->Swapchain().Images().size())) + 1; // Extra mvp ubo for the write pass
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = SCAST_U32(vulkan->Swapchain().Images().size()) * 2; // 2 sampled images per swapchain image
+	poolSizes[1].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 2) + 1; // 2 sampled images per swapchain image plus heightmap for write pass
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	poolSizes[2].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size())) * 2; // 2 storage buffers per swapchain image
 
@@ -1330,8 +1330,15 @@ void VulkanApplication::CreateWritePassDescriptorSetLayout()
 	modelUboLayoutBinding.descriptorCount = 1;
 	modelUboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // Specify that this descriptor will be used in the vertex shader
 
+	// Binding 1: Heightmap texture sampler
+	VkDescriptorSetLayoutBinding heightmapLayoutBinding = {};
+	heightmapLayoutBinding.binding = 1;
+	heightmapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	heightmapLayoutBinding.descriptorCount = 1;
+	heightmapLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; 
+
 	// Create descriptor set layout
-	std::array<VkDescriptorSetLayoutBinding, 1> bindings = { modelUboLayoutBinding };
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { modelUboLayoutBinding, heightmapLayoutBinding };
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = SCAST_U32(bindings.size());
@@ -1411,7 +1418,7 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 	// Create write pass descriptor sets
 	std::vector<VkDescriptorSetLayout> writeLayouts = { writePassDescriptorSetLayout };
 
-	// Create write pass descriptor set for MVP UBO
+	// Create write pass descriptor set for MVP UBO and heightmap texture
 	VkDescriptorSetAllocateInfo writePassAllocInfo = {};
 	writePassAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	writePassAllocInfo.descriptorPool = descriptorPool;
@@ -1427,11 +1434,17 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 	mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);
 	mvpUniformBuffer.SetupDescriptorWriteSet(writePassDescriptorSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
+	// Heightmap texture
+	terrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, writePassDescriptorSet, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+
 	// Create a descriptor write for each descriptor in the set
-	std::array<VkWriteDescriptorSet, 1> writePassDescriptorWrites = {};
+	std::array<VkWriteDescriptorSet, 2> writePassDescriptorWrites = {};
 
 	// Binding 0: MVP Uniform Buffer of terrain
 	writePassDescriptorWrites[0] = mvpUniformBuffer.WriteDescriptorSet();
+
+	// Binding 1: Heightmap texture for vertex buffer
+	writePassDescriptorWrites[1] = terrain.Heightmap().WriteDescriptorSet();
 
 	vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(writePassDescriptorWrites.size()), writePassDescriptorWrites.data(), 0, nullptr);
 }
