@@ -74,4 +74,4 @@ namespace vbt
 	};  
 } 
 
-#endif // !VULKANCORE_H
+#endif // !VULKANCORE_H 

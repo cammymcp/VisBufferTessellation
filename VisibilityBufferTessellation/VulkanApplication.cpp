@@ -48,9 +48,6 @@ void VulkanApplication::Init()
 	InitImGui();
 	RecordVisBuffShadeCommandBuffers();
 	RecordVisBuffWriteCommandBuffer();
-	imGui.AllocateCommandBuffers(vulkan->Device(), commandPool, swapChainFramebuffers.size());
-	for (int i = 0; i < imGui.CommandBuffers().size(); i++)
-		imGui.UpdateCommandBuffer(i);
 }
 
 void VulkanApplication::Update()
@@ -265,7 +262,6 @@ void VulkanApplication::CleanUpSwapChain()
 
 	// Free command buffers
 	vkFreeCommandBuffers(vulkan->Device(), commandPool, SCAST_U32(visBuffShadeCommandBuffers.size()), visBuffShadeCommandBuffers.data());
-	vkFreeCommandBuffers(vulkan->Device(), commandPool, SCAST_U32(imGui.CommandBuffers().size()), imGui.CommandBuffers().data());
 	vkFreeCommandBuffers(vulkan->Device(), commandPool, 1, &visBuffWriteCommandBuffer);
 	vkDestroyPipeline(vulkan->Device(), visBuffShadePipeline, nullptr);
 	vkDestroyPipeline(vulkan->Device(), visBuffWritePipeline, nullptr);
@@ -901,7 +897,9 @@ void VulkanApplication::DrawFrame()
 	}
 	/// =====================================================================================================
 
-	/// VIS SHADE PASS =======================================================================================
+	/// VIS SHADE PASS + IMGUI ==============================================================================
+	// Update command buffer (for ImGui)
+	RecordVisBuffShadeCommandBuffers();
 	// Wait for g-buffer being filled, signal when rendering is complete
 	VkSemaphore renderFinishedSemaphore = vulkan->RenderFinishedSemaphores()[currentFrame];
 	submitInfo.pWaitSemaphores = &visBuffWriteSemaphore;
@@ -915,28 +913,12 @@ void VulkanApplication::DrawFrame()
 	}
 	/// =====================================================================================================
 
-	/// ImGui ===============================================================================================
-	// Wait for rendering to complete, signal present after imgui rendering
-	VkSemaphore imGuiSemaphore = imGui.Semaphores()[currentFrame];
-	submitInfo.pWaitSemaphores = &renderFinishedSemaphore;
-	submitInfo.pSignalSemaphores = &imGuiSemaphore;
-
-	// Submit to queue
-	imGui.UpdateCommandBuffer(imageIndex);
-	VkCommandBuffer imGuiCommandBuffer = imGui.CommandBuffers()[imageIndex];
-	submitInfo.pCommandBuffers = &imGuiCommandBuffer;
-	if (vkQueueSubmit(vulkan->PhysDevice().Queues()->graphics, 1, &submitInfo, vulkan->Fences()[currentFrame]) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to submit imGui command buffer");
-	}
-	/// =====================================================================================================
-
 	// Now submit the resulting image back to the swap chain
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &imGuiSemaphore; // Wait for imgui pass to finish
+	presentInfo.pWaitSemaphores = &renderFinishedSemaphore; // Wait for imgui pass to finish
 
 	VkSwapchainKHR swapChains[] = { vulkan->Swapchain().VkHandle() };
 	presentInfo.swapchainCount = 1;
@@ -1045,6 +1027,8 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 
 		// Vertex shader calculates positions of fullscreen triangle based on index, so no need to bind vertex/index buffers to create a fullscreen quad
 		vkCmdDraw(visBuffShadeCommandBuffers[i], 3, 1, 0, 0);
+
+		imGui.DrawFrame(visBuffShadeCommandBuffers[i]);
 
 		// Now end the render pass
 		vkCmdEndRenderPass(visBuffShadeCommandBuffers[i]);

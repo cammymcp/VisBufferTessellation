@@ -77,7 +77,8 @@ namespace vbt
 			createInfo.enabledLayerCount = 0;
 	
 		// Create instance
-		if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS)
+		VkResult instanceResult = vkCreateInstance(&createInfo, nullptr, &instance);
+		if (instanceResult != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to create instance");
 		}

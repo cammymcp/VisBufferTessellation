@@ -23,18 +23,18 @@ namespace vbt
 		void CreateVulkanResources(VulkanApplication* app);
 		void UpdateFrame(float frameTime);
 		void DrawFrame(VkCommandBuffer commandBuffer);
-		void AllocateCommandBuffers(VkDevice device, VkCommandPool commandPool, size_t numBuffers);
-		void UpdateCommandBuffer(int index);
+		//void AllocateCommandBuffers(VkDevice device, VkCommandPool commandPool, size_t numBuffers);
+		//void UpdateCommandBuffer(int index);
 		void CleanUp();
 
-		std::vector<VkCommandBuffer> CommandBuffers() const { return commandBuffers; }
-		std::vector<VkSemaphore> Semaphores() const { return semaphores; }
+		//std::vector<VkCommandBuffer> CommandBuffers() const { return commandBuffers; }
+		//std::vector<VkSemaphore> Semaphores() const { return semaphores; }
 	private:
 
 		// Vulkan Objects
 		VkDescriptorPool descriptorPool;
-		std::vector<VkCommandBuffer> commandBuffers;
-		std::vector<VkSemaphore> semaphores;
+		//std::vector<VkCommandBuffer> commandBuffers;
+		//std::vector<VkSemaphore> semaphores;
 
 		bool checkboxTest = false;
 		std::array<float, 50> frameTimes{};
