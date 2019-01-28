@@ -72,7 +72,12 @@ namespace vbt
 		static float slider = 0.0f;
 		ImGui::SetNextWindowSize(ImVec2(375, 200));
 		ImGui::Begin("App Settings and Measurements");
-		ImGui::PlotHistogram("Frame Times (ms)", &frameTimes[0], 50, 0, frameTimeChar, frameTimeMin, frameTimeMax, ImVec2(0, 100));
+		ImGui::Text("Frame Times (ms)");
+		ImGui::PlotHistogram("", &frameTimes[0], 50, 0, frameTimeChar, frameTimeMin, frameTimeMax, ImVec2(0, 100));
+		if (ImGui::Button("Reset Frame Times", ImVec2(150, 20)))
+		{
+			ResetFrameGraph();
+		}
 		ImGui::End();
 
 		ImGui::Render();
@@ -132,6 +137,13 @@ namespace vbt
 	//		throw std::runtime_error("Failed to update imgui command buffer");
 	//	}
 	//}
+
+	void ImGUI::ResetFrameGraph()
+	{
+		frameTimes.fill(0.0f);
+		frameTimeMin = 9999.0f;
+		frameTimeMax = 0.0f;
+	}
 
 	void ImGUI::CleanUp()
 	{

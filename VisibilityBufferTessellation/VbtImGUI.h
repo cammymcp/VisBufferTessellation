@@ -30,6 +30,7 @@ namespace vbt
 		//std::vector<VkCommandBuffer> CommandBuffers() const { return commandBuffers; }
 		//std::vector<VkSemaphore> Semaphores() const { return semaphores; }
 	private:
+		void ResetFrameGraph();
 
 		// Vulkan Objects
 		VkDescriptorPool descriptorPool;
