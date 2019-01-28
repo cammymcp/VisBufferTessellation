@@ -102,6 +102,7 @@ namespace vbt
 
 #pragma region Command Buffer Functions
 		void CreateCommandPool();
+		void AllocateVisBuffShadeCommandBuffers();
 		void RecordVisBuffShadeCommandBuffers();
 		void RecordVisBuffWriteCommandBuffer();
 #pragma endregion

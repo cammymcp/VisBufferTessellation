@@ -46,6 +46,7 @@ void VulkanApplication::Init()
 	CreateShadePassDescriptorSets();
 	CreateWritePassDescriptorSet();
 	InitImGui();
+	AllocateVisBuffShadeCommandBuffers();
 	RecordVisBuffShadeCommandBuffers();
 	RecordVisBuffWriteCommandBuffer();
 }
@@ -960,7 +961,7 @@ void VulkanApplication::CreateCommandPool()
 	}
 }
 
-void VulkanApplication::RecordVisBuffShadeCommandBuffers()
+void VulkanApplication::AllocateVisBuffShadeCommandBuffers()
 {
 	visBuffShadeCommandBuffers.resize(swapChainFramebuffers.size());
 
@@ -974,7 +975,10 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 	{
 		throw std::runtime_error("Failed to allocate vis buffer shade command buffers");
 	}
+}
 
+void VulkanApplication::RecordVisBuffShadeCommandBuffers()
+{
 	// Define clear values
 	std::array<VkClearValue, 3> clearValues = {};
 	clearValues[0].color = CLEAR_COLOUR;
