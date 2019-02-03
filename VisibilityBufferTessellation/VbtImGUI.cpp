@@ -6,8 +6,11 @@ namespace vbt
 {	
 	void ImGUI::Init(VulkanApplication* app, GLFWwindow* window, ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool)
 	{
+		// Store app instance
+		appHandle = app;
+
 		// Create vulkan resources
-		CreateVulkanResources(app);
+		CreateVulkanResources();
 
 		// Setup Dear ImGui context
 		IMGUI_CHECKVERSION();
@@ -24,14 +27,14 @@ namespace vbt
 		ImGui_ImplVulkan_Init(&initInfo, renderPass);
 
 		// Load Fonts
-		vbt::PhysicalDevice physDevice = app->GetVulkanCore()->PhysDevice();
+		vbt::PhysicalDevice physDevice = appHandle->GetVulkanCore()->PhysDevice();
 		VkCommandBuffer fontCmd = BeginSingleTimeCommands(info->Device, commandPool);
 		ImGui_ImplVulkan_CreateFontsTexture(fontCmd);
 		EndSingleTimeCommands(fontCmd, info->Device, physDevice, commandPool);
 		ImGui_ImplVulkan_InvalidateFontUploadObjects();
 	}
 
-	void ImGUI::CreateVulkanResources(VulkanApplication* app)
+	void ImGUI::CreateVulkanResources()
 	{
 		// Descriptor Pool
 		std::array<VkDescriptorPoolSize, 1> imGuiPoolSizes = {};
@@ -41,16 +44,23 @@ namespace vbt
 		imGuiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		imGuiPoolInfo.poolSizeCount = SCAST_U32(imGuiPoolSizes.size());
 		imGuiPoolInfo.pPoolSizes = imGuiPoolSizes.data();
-		imGuiPoolInfo.maxSets = SCAST_U32(app->GetVulkanCore()->Swapchain().Images().size());
-		if (vkCreateDescriptorPool(app->GetVulkanCore()->Device(), &imGuiPoolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
+		imGuiPoolInfo.maxSets = SCAST_U32(appHandle->GetVulkanCore()->Swapchain().Images().size());
+		if (vkCreateDescriptorPool(appHandle->GetVulkanCore()->Device(), &imGuiPoolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to create ImGui descriptor pool");
 		}
 	}
 	
 	// Define UI elements to display
-	void ImGUI::UpdateFrame(float frameTime)
+	void ImGUI::Update(float frameTime, glm::vec3 cameraPos, glm::vec3 cameraRot)
 	{
+		// Store local app settings
+		static AppSettings currentSettings;
+		currentSettings.cameraPos = cameraPos;
+		currentSettings.cameraRot.x = WrapAngle(cameraRot.x);
+		currentSettings.cameraRot.y = WrapAngle(cameraRot.y);
+		currentSettings.cameraRot.z = WrapAngle(cameraRot.z);
+
 		// Start the Dear ImGui frame
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
@@ -69,16 +79,40 @@ namespace vbt
 		char frameTimeChar[64];
 		int ret = snprintf(frameTimeChar, sizeof frameTimeChar, "%.2f", frameTime);
 
-		static float slider = 0.0f;
-		ImGui::SetNextWindowSize(ImVec2(375, 200));
-		ImGui::Begin("App Settings and Measurements");
-		ImGui::Text("Frame Times (ms)");
-		ImGui::PlotHistogram("", &frameTimes[0], 50, 0, frameTimeChar, frameTimeMin, frameTimeMax, ImVec2(0, 100));
-		if (ImGui::Button("Reset Frame Times", ImVec2(150, 20)))
+		ImGui::Begin("Menu");
+		if (ImGui::CollapsingHeader("Measurements"))
 		{
-			ResetFrameGraph();
+			ImGui::Text("Frame Times (ms)");
+			ImGui::PlotHistogram("", &frameTimes[0], 50, 0, frameTimeChar, frameTimeMin, frameTimeMax, ImVec2(0, 100));
+			if (ImGui::Button("Reset Frame Times", ImVec2(150, 20)))
+			{
+				ResetFrameGraph();
+			}
+		}
+		if (ImGui::CollapsingHeader("Camera"))
+		{
+			ImGui::Text("Position: "); 
+			ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.2f);
+			ImGui::SameLine(); if (ImGui::InputFloat("x##pos", &(currentSettings.cameraPos.x), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("y##pos", &(currentSettings.cameraPos.y), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("z##pos", &(currentSettings.cameraPos.z), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
+			ImGui::PopItemWidth();
+			ImGui::Separator();
+			ImGui::Text("Rotation: ");
+			ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.2f);
+			ImGui::SameLine(); if (ImGui::InputFloat("x##rot", &(currentSettings.cameraRot.x), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("y##rot", &(currentSettings.cameraRot.y), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("z##rot", &(currentSettings.cameraRot.z), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
+			ImGui::PopItemWidth();
 		}
 		ImGui::End();
+
+		// Only update the application when a value has been changed
+		if (currentSettings.updateSettings)
+		{
+			appHandle->UpdateSettings(currentSettings);
+			currentSettings.updateSettings = false;
+		}
 
 		ImGui::Render();
 	}

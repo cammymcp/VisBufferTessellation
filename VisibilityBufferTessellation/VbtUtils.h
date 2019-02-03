@@ -85,6 +85,15 @@ namespace vbt
 		if (err < 0)
 			abort();
 	}
+
+	// Wraps given angle to the range of [0, 360)
+	static float WrapAngle(float x) 
+	{
+		x = fmod(x, 360);
+		if (x < 0)
+			x += 360;
+		return x;
+	}
 }
 
 #endif // !HELPERFUNCTIONS_H

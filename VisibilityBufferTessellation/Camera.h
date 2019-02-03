@@ -20,6 +20,9 @@ namespace vbt
 		void Translate(glm::vec3 delta);
 		void Reset();
 
+		glm::vec3 Position() { return position; }
+		glm::vec3 Rotation() { return rotation; }
+
 		glm::mat4 ViewMatrix() const { return viewMatrix; }
 		glm::mat4 ProjectionMatrix() const { return projMatrix; }
 

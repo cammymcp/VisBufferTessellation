@@ -57,6 +57,7 @@ namespace vbt
 
 		VulkanCore* GetVulkanCore() { return vulkan; }
 		const std::string title = "Visibility Buffer Tessellation";
+		void UpdateSettings(AppSettings settings);
 
 	private:
 		// Functions

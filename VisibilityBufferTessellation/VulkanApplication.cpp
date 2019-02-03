@@ -57,7 +57,7 @@ void VulkanApplication::Update()
 	{
 		glfwPollEvents();
 		UpdateMouse();
-		imGui.UpdateFrame(frameTime);
+		imGui.Update(frameTime, camera.Position(), camera.Rotation());
 		
 		// Draw frame and calculate frame time
 		auto frameStart = std::chrono::high_resolution_clock::now();
@@ -130,7 +130,14 @@ void VulkanApplication::InitImGui()
 	initInfo.Allocator = nullptr;
 	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
 	imGui.Init(this, window, &initInfo, visBuffShadeRenderPass, commandPool);
-	imGui.UpdateFrame(0.0f); // Update imgui frame once to populate buffers
+	imGui.Update(0.0f, camera.Position(), camera.Rotation()); // Update imgui frame once to populate buffers
+}
+
+void VulkanApplication::UpdateSettings(AppSettings settings)
+{
+	// Camera
+	camera.SetPosition(settings.cameraPos);
+	camera.SetRotation(settings.cameraRot);
 }
 #pragma endregion
 
