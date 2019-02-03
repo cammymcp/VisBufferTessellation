@@ -10,7 +10,7 @@
 #define VERTEX_OFFSET 0.1f
 #define UV_SCALE 1.0f
 
-const std::string TEXTURE_PATH = "textures/grid.png";
+const std::string TEXTURE_PATH = "textures/rock.jpg";
 const std::string HEIGHTMAP_PATH = "textures/heightmap.png";
 
 namespace vbt

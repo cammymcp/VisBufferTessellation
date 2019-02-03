@@ -781,7 +781,7 @@ void VulkanApplication::InitCamera()
 {
 	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 500.0f, true);
 	camera.SetRotation(glm::vec3(0.0f, 0.0f, 0.0f), true);
-	camera.SetPosition(glm::vec3(0.0f, -5.0f, 0.0f), true);
+	camera.SetPosition(glm::vec3(0.0f, -10.0f, 0.0f), true);
 }
 
 void VulkanApplication::CreateFrameBuffers()
