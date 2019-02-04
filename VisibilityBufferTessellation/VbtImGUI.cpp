@@ -110,7 +110,7 @@ namespace vbt
 		// Only update the application when a value has been changed
 		if (currentSettings.updateSettings)
 		{
-			appHandle->UpdateSettings(currentSettings);
+			appHandle->ApplySettings(currentSettings);
 			currentSettings.updateSettings = false;
 		}
 

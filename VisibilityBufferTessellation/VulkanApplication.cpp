@@ -133,7 +133,7 @@ void VulkanApplication::InitImGui()
 	imGui.Update(0.0f, camera.Position(), camera.Rotation()); // Update imgui frame once to populate buffers
 }
 
-void VulkanApplication::UpdateSettings(AppSettings settings)
+void VulkanApplication::ApplySettings(AppSettings settings)
 {
 	// Camera
 	camera.SetPosition(settings.cameraPos);
