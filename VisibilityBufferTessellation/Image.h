@@ -14,6 +14,7 @@ namespace vbt
 		void CreateImageView(const VkDevice device, VkImageAspectFlags aspectFlags);
 		void CreateSampler(VkDevice device, VkSamplerAddressMode addressMode);
 		void SetUpDescriptorInfo(VkImageLayout layout);
+		void SetUpDescriptorInfo(VkImageLayout layout, VkSampler sampler);
 		void SetupDescriptorWriteSet(VkDescriptorSet& dstSet, uint32_t binding, VkDescriptorType type, uint32_t count);
 		void TransitionLayout(VkImageLayout srcLayout, VkImageLayout dstLayout, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool);
 		void CopyFromBuffer(VkBuffer buffer, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool);

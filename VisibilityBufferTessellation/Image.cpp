@@ -84,7 +84,15 @@ namespace vbt
 
 	void Image::SetUpDescriptorInfo(VkImageLayout layout)
 	{
-		descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		descriptor.imageLayout = layout;
+		descriptor.imageView = imageView;
+		descriptor.sampler = sampler;
+	}
+
+
+	void Image::SetUpDescriptorInfo(VkImageLayout layout, VkSampler sampler)
+	{
+		descriptor.imageLayout = layout;
 		descriptor.imageView = imageView;
 		descriptor.sampler = sampler;
 	}

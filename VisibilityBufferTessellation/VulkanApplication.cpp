@@ -30,15 +30,13 @@ void VulkanApplication::Init()
 	InitCamera();
 	CreateVmaAllocator();
 	CreateCommandPool();
-	CreateVisBuffWriteRenderPass();
-	CreateVisBuffShadeRenderPass();
+	CreateVisBuffRenderPass();
 	CreateShadePassDescriptorSetLayout();
 	CreateWritePassDescriptorSetLayout();
 	CreatePipelineCache();
 	CreateVisBuffWritePipeline();
 	CreateVisBuffShadePipeline();
 	terrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
-	CreateDepthSampler();
 	//chalet.LoadFromFile(MODEL_PATH);
 	CreateUniformBuffers();
 	CreateDescriptorPool();
@@ -46,9 +44,8 @@ void VulkanApplication::Init()
 	CreateShadePassDescriptorSets();
 	CreateWritePassDescriptorSet();
 	InitImGui();
-	AllocateVisBuffShadeCommandBuffers();
-	RecordVisBuffShadeCommandBuffers();
-	RecordVisBuffWriteCommandBuffer();
+	AllocateVisBuffCommandBuffers();
+	RecordVisBuffCommandBuffers();
 }
 
 void VulkanApplication::Update()
@@ -78,7 +75,6 @@ void VulkanApplication::CleanUp()
 	CleanUpSwapChain();
 
 	// Destroy texture objects
-	vkDestroySampler(vulkan->Device(), depthSampler, nullptr);
 	visibilityBuffer.visibility.CleanUp(allocator, vulkan->Device());
 	debugAttachment.CleanUp(allocator, vulkan->Device());
 
@@ -99,9 +95,6 @@ void VulkanApplication::CleanUp()
 	imGui.CleanUp();
 
 	vmaDestroyAllocator(allocator);
-
-	// Destroy geometry pass semaphore
-	vkDestroySemaphore(vulkan->Device(), visBuffWriteSemaphore, nullptr);
 
 	// Destroy command pool
 	vkDestroyCommandPool(vulkan->Device(), commandPool, nullptr);
@@ -129,7 +122,7 @@ void VulkanApplication::InitImGui()
 	initInfo.PipelineCache = pipelineCache;
 	initInfo.Allocator = nullptr;
 	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
-	imGui.Init(this, window, &initInfo, visBuffShadeRenderPass, commandPool);
+	imGui.Init(this, window, &initInfo, visBuffRenderPass, commandPool);
 	imGui.Update(0.0f, camera.Position(), camera.Rotation()); // Update imgui frame once to populate buffers
 }
 
@@ -244,22 +237,19 @@ void VulkanApplication::RecreateSwapChain()
 
 	// Recreate required objects
 	vulkan->Swapchain().RecreateSwapChain(window, vulkan->PhysDevice().VkHandle(), vulkan->Device());
-	CreateVisBuffWriteRenderPass();
-	CreateVisBuffShadeRenderPass();
+	CreateVisBuffRenderPass();
 	CreatePipelineCache();
 	CreateVisBuffWritePipeline();
 	CreateVisBuffShadePipeline();
 	CreateDepthResources();
 	CreateFrameBuffers();
-	RecordVisBuffShadeCommandBuffers();
-	RecordVisBuffWriteCommandBuffer();
+	RecordVisBuffCommandBuffers();
 }
 
 void VulkanApplication::CleanUpSwapChain()
 {
 	// Destroy depth buffers
 	visibilityBuffer.depth.CleanUp(allocator, vulkan->Device());
-	visBuffShadeDepthImage.CleanUp(allocator, vulkan->Device());
 
 	// Destroy frame buffers
 	for (size_t i = 0; i < swapChainFramebuffers.size(); i++)
@@ -269,15 +259,13 @@ void VulkanApplication::CleanUpSwapChain()
 	vkDestroyFramebuffer(vulkan->Device(), visibilityBuffer.frameBuffer, nullptr);
 
 	// Free command buffers
-	vkFreeCommandBuffers(vulkan->Device(), commandPool, SCAST_U32(visBuffShadeCommandBuffers.size()), visBuffShadeCommandBuffers.data());
-	vkFreeCommandBuffers(vulkan->Device(), commandPool, 1, &visBuffWriteCommandBuffer);
+	vkFreeCommandBuffers(vulkan->Device(), commandPool, SCAST_U32(visBuffCommandBuffers.size()), visBuffCommandBuffers.data());
 	vkDestroyPipeline(vulkan->Device(), visBuffShadePipeline, nullptr);
 	vkDestroyPipeline(vulkan->Device(), visBuffWritePipeline, nullptr);
 	vkDestroyPipelineLayout(vulkan->Device(), visBuffShadePipelineLayout, nullptr);
 	vkDestroyPipelineLayout(vulkan->Device(), visBuffWritePipelineLayout, nullptr);
 	vkDestroyPipelineCache(vulkan->Device(), pipelineCache, nullptr);
-	vkDestroyRenderPass(vulkan->Device(), visBuffShadeRenderPass, nullptr);
-	vkDestroyRenderPass(vulkan->Device(), visBuffWriteRenderPass, nullptr);
+	vkDestroyRenderPass(vulkan->Device(), visBuffRenderPass, nullptr);
 }
 #pragma endregion
 
@@ -403,8 +391,8 @@ void VulkanApplication::CreateVisBuffShadePipeline()
 	pipelineInfo.pColorBlendState = &colourBlending;
 	pipelineInfo.pDynamicState = &dynamicState;
 	pipelineInfo.layout = visBuffShadePipelineLayout;
-	pipelineInfo.renderPass = visBuffShadeRenderPass;
-	pipelineInfo.subpass = 0; // Index of the sub pass where this pipeline will be used
+	pipelineInfo.renderPass = visBuffRenderPass;
+	pipelineInfo.subpass = 1; // Index of the sub pass where this pipeline will be used
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; 
 	pipelineInfo.basePipelineIndex = -1;
 	pipelineInfo.pNext = nullptr;
@@ -535,7 +523,7 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.stageCount = 2;
 	pipelineInfo.layout = visBuffWritePipelineLayout;
-	pipelineInfo.renderPass = visBuffWriteRenderPass;
+	pipelineInfo.renderPass = visBuffRenderPass;
 	pipelineInfo.subpass = 0; // Index of the sub pass where this pipeline will be used
 	pipelineInfo.pStages = visBuffWriteShaderStages;
 	pipelineInfo.pInputAssemblyState = &inputAssembly;
@@ -596,90 +584,15 @@ void VulkanApplication::CreateVisBuffWritePipelineLayout()
 	}
 }
 
-void VulkanApplication::CreateVisBuffWriteRenderPass()
+void VulkanApplication::CreateVisBuffRenderPass()
 {
-	// Create Frame Buffer attachments
+	// Setup images for use as frame buffer attachments
 	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &visibilityBuffer.visibility, allocator); // 32 bit uint will be unpacked into four 8bit floats
+	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &debugAttachment, allocator);
 	CreateDepthResources();
 
-	// Create attachment descriptions for the visibility buffer
-	std::array<VkAttachmentDescription, 2> attachments = {};
-
-	// Fill attachment properties
-	for (uint32_t i = 0; i < 2; ++i)
-	{
-		attachments[i].samples = VK_SAMPLE_COUNT_1_BIT;
-		attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		attachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		attachments[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-		attachments[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		if (i == 1) // Depth attachment
-		{
-			attachments[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			attachments[i].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		}
-		else
-		{
-			attachments[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			attachments[i].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		}
-	}
-	// Fill Formats
-	attachments[0].format = visibilityBuffer.visibility.Format();
-	attachments[1].format = visibilityBuffer.depth.Format();
-
-	// Create attachment references for the subpass to use
-	std::vector<VkAttachmentReference> colorReferences;
-	colorReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-	VkAttachmentReference depthReference = {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
-
-	// Create subpass (one for now)
-	VkSubpassDescription subpass = {};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // Specify that this is a graphics subpass, not compute
-	subpass.colorAttachmentCount = SCAST_U32(colorReferences.size());;
-	subpass.pColorAttachments = colorReferences.data(); // Important: The attachment's index in this array is what is referenced in the out variable of the shader!
-	subpass.pDepthStencilAttachment = &depthReference;
-
-	// Use subpass dependencies for attachment layout transitions
-	std::array<VkSubpassDependency, 2> dependencies = {};
-	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[0].dstSubpass = 0;
-	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-	dependencies[1].srcSubpass = 0;
-	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-	// Create the render pass with required attachments
-	VkRenderPassCreateInfo renderPassInfo = {};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = SCAST_U32(attachments.size());
-	renderPassInfo.pAttachments = attachments.data();
-	renderPassInfo.subpassCount = 1;
-	renderPassInfo.pSubpasses = &subpass;
-	renderPassInfo.dependencyCount = 2;
-	renderPassInfo.pDependencies = dependencies.data();
-
-	// Create geometry pass
-	if (vkCreateRenderPass(vulkan->Device(), &renderPassInfo, nullptr, &visBuffWriteRenderPass) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create render pass");
-	}
-}
-
-void VulkanApplication::CreateVisBuffShadeRenderPass()
-{
-	// Create debug attachment
-	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &debugAttachment, allocator);
-
-	std::array<VkAttachmentDescription, 3> attachments = {};
+	// Create attachment descriptions
+	std::array<VkAttachmentDescription, 4> attachments = {};
 	// Color attachment
 	attachments[0].format = vulkan->Swapchain().ImageFormat();
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -689,8 +602,8 @@ void VulkanApplication::CreateVisBuffShadeRenderPass()
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-	// Debug Attachment
-	attachments[1].format = debugAttachment.Format();
+	// Vis Buff attachment
+	attachments[1].format = visibilityBuffer.visibility.Format();
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -698,42 +611,63 @@ void VulkanApplication::CreateVisBuffShadeRenderPass()
 	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[1].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	// Depth attachment
-	attachments[2].format = FindDepthFormat();
+	// Debug Attachment
+	attachments[2].format = debugAttachment.Format();
 	attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[2].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+	attachments[2].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	// Depth attachment
+	attachments[3].format = visibilityBuffer.depth.Format();
+	attachments[3].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[3].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[3].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[3].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[3].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[3].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[3].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	// Attachment References
-	VkAttachmentReference colourReference = {};
-	colourReference.attachment = 0;
-	colourReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	VkAttachmentReference debugReference = {};
-	debugReference.attachment = 1;
-	debugReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	VkAttachmentReference depthReference = {};
-	depthReference.attachment = 2;
-	depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-	std::vector<VkAttachmentReference> colourReferences = { colourReference, debugReference };
+	// Two subpasses
+	std::array<VkSubpassDescription, 2> subpassDescriptions{};
 
-	VkSubpassDescription subpassDescription = {};
-	subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpassDescription.colorAttachmentCount = SCAST_U32(colourReferences.size());
-	subpassDescription.pColorAttachments = colourReferences.data();
-	subpassDescription.pDepthStencilAttachment = &depthReference;
-	subpassDescription.inputAttachmentCount = 0; /*3;*/
-	subpassDescription.pInputAttachments = nullptr;/* inputAttachmentRefs;*/
-	subpassDescription.preserveAttachmentCount = 0;
-	subpassDescription.pPreserveAttachments = nullptr;
-	subpassDescription.pResolveAttachments = nullptr;
+	// First Subpass: Visibility Buffer Write
+	// --------------------------------------
+	// Attachment references 
+	std::vector<VkAttachmentReference> writeColorReferences;
+	writeColorReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+	writeColorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+	VkAttachmentReference depthReference = { 3, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
 
-	// Subpass dependencies for layout transitions
-	std::array<VkSubpassDependency, 2> dependencies = {};
+	// Subpass Description
+	subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // Specify that this is a graphics subpass, not compute
+	subpassDescriptions[0].colorAttachmentCount = SCAST_U32(writeColorReferences.size());;
+	subpassDescriptions[0].pColorAttachments = writeColorReferences.data(); // Important: The attachment's index in this array is what is referenced in the out variable of the shader!
+	subpassDescriptions[0].pDepthStencilAttachment = &depthReference;
 
+	// Second Subpass: Visibility Buffer Shade
+	// --------------------------------------
+	// Attachment references 
+	std::vector<VkAttachmentReference> shadeColourReferences;
+	shadeColourReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+	shadeColourReferences.push_back({ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Debug attachment
+	VkAttachmentReference inputReferences[1];
+	inputReferences[0] = { 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+
+	// Subpass Description
+	subpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpassDescriptions[1].colorAttachmentCount = SCAST_U32(shadeColourReferences.size());
+	subpassDescriptions[1].pColorAttachments = shadeColourReferences.data();
+	subpassDescriptions[1].pDepthStencilAttachment = &depthReference;
+	// Input attachments from vis buff write subpass
+	subpassDescriptions[1].inputAttachmentCount = 1;
+	subpassDescriptions[1].pInputAttachments = inputReferences;
+	// --------------------------------------
+
+	// Use subpass dependencies for attachment layout transitions
+	std::array<VkSubpassDependency, 3> dependencies = {};
 	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	dependencies[0].dstSubpass = 0;
 	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -742,27 +676,37 @@ void VulkanApplication::CreateVisBuffShadeRenderPass()
 	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
+	// This dependency transitions the input attachment from color attachment to shader read
 	dependencies[1].srcSubpass = 0;
-	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[1].dstSubpass = 1;
 	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
+	dependencies[2].srcSubpass = 0;
+	dependencies[2].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[2].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[2].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[2].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	// Create the render pass with required attachments
 	VkRenderPassCreateInfo renderPassInfo = {};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassInfo.attachmentCount = SCAST_U32(attachments.size());
 	renderPassInfo.pAttachments = attachments.data();
-	renderPassInfo.subpassCount = 1;
-	renderPassInfo.pSubpasses = &subpassDescription;
+	renderPassInfo.subpassCount = SCAST_U32(subpassDescriptions.size());
+	renderPassInfo.pSubpasses = subpassDescriptions.data();
 	renderPassInfo.dependencyCount = SCAST_U32(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
 
-	// Create vis buff shade render pass
-	if (vkCreateRenderPass(vulkan->Device(), &renderPassInfo, nullptr, &visBuffShadeRenderPass) != VK_SUCCESS)
+	// Create geometry pass
+	if (vkCreateRenderPass(vulkan->Device(), &renderPassInfo, nullptr, &visBuffRenderPass) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create vis buff shade render pass");
+		throw std::runtime_error("Failed to create render pass");
 	}
 }
 
@@ -794,45 +738,26 @@ void VulkanApplication::InitCamera()
 void VulkanApplication::CreateFrameBuffers()
 {
 	// Create Visibility Buffer frame buffer
-	std::array<VkImageView, 2> attachments = {};
-	attachments[0] = visibilityBuffer.visibility.ImageView();
-	attachments[1] = visibilityBuffer.depth.ImageView();
+	std::array<VkImageView, 4> attachments = {};
 
 	VkFramebufferCreateInfo framebufferInfo = {};
 	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	framebufferInfo.pNext = NULL;
-	framebufferInfo.renderPass = visBuffWriteRenderPass; // Tell frame buffer which render pass it should be compatible with
+	framebufferInfo.renderPass = visBuffRenderPass; // Tell frame buffer which render pass it should be compatible with
 	framebufferInfo.attachmentCount = SCAST_U32(attachments.size());
 	framebufferInfo.pAttachments = attachments.data();
 	framebufferInfo.width = vulkan->Swapchain().Extent().width;
 	framebufferInfo.height = vulkan->Swapchain().Extent().height;
 	framebufferInfo.layers = 1;
 
-	if (vkCreateFramebuffer(vulkan->Device(), &framebufferInfo, nullptr, &visibilityBuffer.frameBuffer) != VK_SUCCESS) 
-	{
-		throw std::runtime_error("Failed to create frame buffer");
-	}
-
 	// Create visibility buffer shade frame buffer for each swapchain image
 	swapChainFramebuffers.resize(vulkan->Swapchain().ImageViews().size());
 	for (size_t i = 0; i < vulkan->Swapchain().ImageViews().size(); i++)
 	{
-		std::array<VkImageView, 3> attachments =
-		{
-			vulkan->Swapchain().ImageViews()[i],
-			debugAttachment.ImageView(),
-			visBuffShadeDepthImage.ImageView()
-		};
-
-		VkFramebufferCreateInfo framebufferInfo = {};
-		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferInfo.pNext = NULL;
-		framebufferInfo.renderPass = visBuffShadeRenderPass; // Tell frame buffer which render pass it should be compatible with
-		framebufferInfo.attachmentCount = SCAST_U32(attachments.size());
-		framebufferInfo.pAttachments = attachments.data();
-		framebufferInfo.width = vulkan->Swapchain().Extent().width;
-		framebufferInfo.height = vulkan->Swapchain().Extent().height;
-		framebufferInfo.layers = 1;
+		attachments[0] = vulkan->Swapchain().ImageViews()[i];
+		attachments[1] = visibilityBuffer.visibility.ImageView();
+		attachments[2] = debugAttachment.ImageView();
+		attachments[3] = visibilityBuffer.depth.ImageView();
 
 		if (vkCreateFramebuffer(vulkan->Device(), &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) 
 		{
@@ -866,6 +791,7 @@ void VulkanApplication::DrawFrame()
 	// Acquire image from swap chain. ImageAvailableSemaphore will be signaled when the image is ready to be drawn to. Check if we have to recreate the swap chain
 	uint32_t imageIndex;
 	VkSemaphore imageAvailableSemaphore = vulkan->ImageAvailableSemaphores()[currentFrame];
+	VkSemaphore renderFinishedSemaphore = vulkan->RenderFinishedSemaphores()[currentFrame];
 	VkResult result = vkAcquireNextImageKHR(vulkan->Device(), vulkan->Swapchain().VkHandle(), std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 	if (result == VK_ERROR_OUT_OF_DATE_KHR)
 	{
@@ -883,43 +809,28 @@ void VulkanApplication::DrawFrame()
 	// Update the uniform buffers
 	UpdateMVPUniformBuffer();
 
-	/// VIS WRITE PASS =======================================================================================
 	// Submit the command buffer. Waits for the provided semaphores to be signaled before beginning execution
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }; // Waiting until we can start writing color, in theory this means the implementation can execute the vertex buffer while image isn't available
 	submitInfo.pWaitDstStageMask = waitStages;
 
-	// Wait for image to be available, and signal when visibility buffer is filled
+	// Wait for image to be available, and signal when rendering is finished
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitSemaphores = &imageAvailableSemaphore;
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &visBuffWriteSemaphore;
-
-	// Submit to queue
-	submitInfo.pCommandBuffers = &visBuffWriteCommandBuffer;
-	submitInfo.commandBufferCount = 1;
-	if (vkQueueSubmit(vulkan->PhysDevice().Queues()->graphics, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to submit visBuffWrite command buffer");
-	}
-	/// =====================================================================================================
-
-	/// VIS SHADE PASS + IMGUI ==============================================================================
-	// Update command buffer (for ImGui)
-	RecordVisBuffShadeCommandBuffers();
-	// Wait for g-buffer being filled, signal when rendering is complete
-	VkSemaphore renderFinishedSemaphore = vulkan->RenderFinishedSemaphores()[currentFrame];
-	submitInfo.pWaitSemaphores = &visBuffWriteSemaphore;
 	submitInfo.pSignalSemaphores = &renderFinishedSemaphore;
 
+	// Update command buffer (for ImGui)
+	RecordVisBuffCommandBuffers();
+
 	// Submit to queue
-	submitInfo.pCommandBuffers = &visBuffShadeCommandBuffers[imageIndex];
+	submitInfo.pCommandBuffers = &visBuffCommandBuffers[imageIndex];
+	submitInfo.commandBufferCount = 1;
 	if (vkQueueSubmit(vulkan->PhysDevice().Queues()->graphics, 1, &submitInfo, vulkan->Fences()[currentFrame]) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to submit visBuffShade command buffer");
+		throw std::runtime_error("Failed to submit visBuff command buffer");
 	}
-	/// =====================================================================================================
 
 	// Now submit the resulting image back to the swap chain
 	VkPresentInfoKHR presentInfo = {};
@@ -968,39 +879,40 @@ void VulkanApplication::CreateCommandPool()
 	}
 }
 
-void VulkanApplication::AllocateVisBuffShadeCommandBuffers()
+void VulkanApplication::AllocateVisBuffCommandBuffers()
 {
-	visBuffShadeCommandBuffers.resize(swapChainFramebuffers.size());
+	visBuffCommandBuffers.resize(swapChainFramebuffers.size());
 
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = commandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = SCAST_U32(visBuffShadeCommandBuffers.size());
+	allocInfo.commandBufferCount = SCAST_U32(visBuffCommandBuffers.size());
 
-	if (vkAllocateCommandBuffers(vulkan->Device(), &allocInfo, visBuffShadeCommandBuffers.data()) != VK_SUCCESS)
+	if (vkAllocateCommandBuffers(vulkan->Device(), &allocInfo, visBuffCommandBuffers.data()) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to allocate vis buffer shade command buffers");
+		throw std::runtime_error("Failed to allocate vis buffer command buffers");
 	}
 }
 
-void VulkanApplication::RecordVisBuffShadeCommandBuffers()
+void VulkanApplication::RecordVisBuffCommandBuffers()
 {
 	// Define clear values
-	std::array<VkClearValue, 3> clearValues = {};
-	clearValues[0].color = CLEAR_COLOUR;
+	std::array<VkClearValue, 4> clearValues = {};
+	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	clearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	clearValues[2].depthStencil = { 1.0f, 0 };
+	clearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+	clearValues[3].depthStencil = { 1.0f, 0 };
 
 	// Begin recording command buffers
-	for (size_t i = 0; i < visBuffShadeCommandBuffers.size(); i++)
+	for (size_t i = 0; i < visBuffCommandBuffers.size(); i++)
 	{
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 		beginInfo.pInheritanceInfo = nullptr; // Optional
 
-		if (vkBeginCommandBuffer(visBuffShadeCommandBuffers[i], &beginInfo) != VK_SUCCESS)
+		if (vkBeginCommandBuffer(visBuffCommandBuffers[i], &beginInfo) != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to begin recording vis buffer shade command buffer");
 		}
@@ -1008,7 +920,7 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 		// Start the render pass
 		VkRenderPassBeginInfo renderPassInfo = {};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-		renderPassInfo.renderPass = visBuffShadeRenderPass;
+		renderPassInfo.renderPass = visBuffRenderPass;
 		renderPassInfo.framebuffer = swapChainFramebuffers[i];
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.renderArea.extent = vulkan->Swapchain().Extent();
@@ -1016,118 +928,51 @@ void VulkanApplication::RecordVisBuffShadeCommandBuffers()
 		renderPassInfo.pClearValues = clearValues.data();
 
 		// The first parameter for every command is always the command buffer to record the command to.
-		vkCmdBeginRenderPass(visBuffShadeCommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(visBuffCommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		VkViewport viewport = {};
 		viewport.width = (float)vulkan->Swapchain().Extent().width;
 		viewport.height = (float)vulkan->Swapchain().Extent().height;
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
-		vkCmdSetViewport(visBuffShadeCommandBuffers[i], 0, 1, &viewport);
+		vkCmdSetViewport(visBuffCommandBuffers[i], 0, 1, &viewport);
 
 		VkRect2D scissor = {};
 		scissor.extent = vulkan->Swapchain().Extent();
 		scissor.offset = { 0, 0 };
-		vkCmdSetScissor(visBuffShadeCommandBuffers[i], 0, 1, &scissor);
+		vkCmdSetScissor(visBuffCommandBuffers[i], 0, 1, &scissor);
 
-		// Bind the correct descriptor set for this swapchain image
-		vkCmdBindDescriptorSets(visBuffShadeCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffShadePipelineLayout, 0, 1, &shadePassDescriptorSets[i], 0, nullptr);
+		// First Subpass: Write to visibility buffer
+		// -----------------------------------------
+		vkCmdBindDescriptorSets(visBuffCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffWritePipelineLayout, 0, 1, &writePassDescriptorSet, 0, nullptr);
+		vkCmdBindPipeline(visBuffCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffWritePipeline);
+		VkDeviceSize offsets[1] = { 0 };
+		VkBuffer vertexBuffers[] = { terrain.VertexBuffer().VkHandle() };
+		vkCmdBindVertexBuffers(visBuffCommandBuffers[i], 0, 1, vertexBuffers, offsets);
+		vkCmdBindIndexBuffer(visBuffCommandBuffers[i], terrain.IndexBuffer().VkHandle(), 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(visBuffCommandBuffers[i], SCAST_U32(terrain.Indices().size()), 1, 0, 0, 0);
+		// -----------------------------------------
 
-		// Now bind the graphics pipeline
-		vkCmdBindPipeline(visBuffShadeCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffShadePipeline);
+		// Second Subpass: Shading Pass
+		// -----------------------------------------
+		vkCmdNextSubpass(visBuffCommandBuffers[i], VK_SUBPASS_CONTENTS_INLINE);
 
-		// Vertex shader calculates positions of fullscreen triangle based on index, so no need to bind vertex/index buffers to create a fullscreen quad
-		vkCmdDraw(visBuffShadeCommandBuffers[i], 3, 1, 0, 0);
+		vkCmdBindDescriptorSets(visBuffCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffShadePipelineLayout, 0, 1, &shadePassDescriptorSets[i], 0, nullptr);
+		vkCmdBindPipeline(visBuffCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffShadePipeline);
+		vkCmdDraw(visBuffCommandBuffers[i], 3, 1, 0, 0); // Vertex shader calculates positions of fullscreen triangle based on index, so no need to bind vertex/index buffers to create a fullscreen quad
+		// -----------------------------------------
 
-		imGui.DrawFrame(visBuffShadeCommandBuffers[i]);
+		// Imgui pass
+		imGui.DrawFrame(visBuffCommandBuffers[i]);
 
 		// Now end the render pass
-		vkCmdEndRenderPass(visBuffShadeCommandBuffers[i]);
+		vkCmdEndRenderPass(visBuffCommandBuffers[i]);
 
 		// And end recording of command buffers
-		if (vkEndCommandBuffer(visBuffShadeCommandBuffers[i]) != VK_SUCCESS)
+		if (vkEndCommandBuffer(visBuffCommandBuffers[i]) != VK_SUCCESS)
 		{
 			throw std::runtime_error("Failed to record vis Buff Shade command buffer");
 		}
-	}
-}
-
-void VulkanApplication::RecordVisBuffWriteCommandBuffer()
-{
-	VkCommandBufferAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = commandPool;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = 1;
-
-	if (vkAllocateCommandBuffers(vulkan->Device(), &allocInfo, &visBuffWriteCommandBuffer) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to allocate vis buff write command buffer");
-	}
-
-	// Create the semaphore to synchronise the visibility buffer write pass
-	VkSemaphoreCreateInfo semaphoreInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-	if (vkCreateSemaphore(vulkan->Device(), &semaphoreInfo, nullptr, &visBuffWriteSemaphore) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create vis buff write pass semaphore");
-	}
-
-	// Set up clear values for each attachment
-	std::array<VkClearValue, 2> clearValues = {};
-	clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	// Begin recording the command buffer
-	VkCommandBufferBeginInfo cmdBeginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-	if (vkBeginCommandBuffer(visBuffWriteCommandBuffer, &cmdBeginInfo) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to begin recording vis buff write command buffer");
-	}
-
-	// Render Pass info
-	VkRenderPassBeginInfo renderPassInfo = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
-	renderPassInfo.renderPass = visBuffWriteRenderPass;
-	renderPassInfo.framebuffer = visibilityBuffer.frameBuffer;
-	renderPassInfo.renderArea.extent = vulkan->Swapchain().Extent();
-	renderPassInfo.clearValueCount = SCAST_U32(clearValues.size());
-	renderPassInfo.pClearValues = clearValues.data();
-
-	// Begin the render pass
-	vkCmdBeginRenderPass(visBuffWriteCommandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport viewport = {};
-	viewport.width = (float)vulkan->Swapchain().Extent().width;
-	viewport.height = (float)vulkan->Swapchain().Extent().height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-	vkCmdSetViewport(visBuffWriteCommandBuffer, 0, 1, &viewport);
-
-	VkRect2D scissor = {};
-	scissor.extent = vulkan->Swapchain().Extent();
-	scissor.offset = { 0, 0 };
-	vkCmdSetScissor(visBuffWriteCommandBuffer, 0, 1, &scissor);
-
-	// Bind descriptor set
-	vkCmdBindDescriptorSets(visBuffWriteCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffWritePipelineLayout, 0, 1, &writePassDescriptorSet, 0, nullptr);
-
-	// Bind the pipeline
-	vkCmdBindPipeline(visBuffWriteCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffWritePipeline);
-
-	// Bind geometry buffers
-	VkDeviceSize offsets[1] = { 0 };
-	VkBuffer vertexBuffers[] = { terrain.VertexBuffer().VkHandle() };
-	vkCmdBindVertexBuffers(visBuffWriteCommandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindIndexBuffer(visBuffWriteCommandBuffer, terrain.IndexBuffer().VkHandle(), 0, VK_INDEX_TYPE_UINT32);
-
-	// Draw using index buffer
-	vkCmdDrawIndexed(visBuffWriteCommandBuffer, SCAST_U32(terrain.Indices().size()), 1, 0, 0, 0);
-
-	vkCmdEndRenderPass(visBuffWriteCommandBuffer);
-
-	// End recording of command buffer
-	if (vkEndCommandBuffer(visBuffWriteCommandBuffer) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to record vis buff write command buffer");
 	}
 }
 #pragma endregion
@@ -1144,14 +989,6 @@ void VulkanApplication::CreateDepthResources()
 
 	// Transition depth image for shader usage
 	visibilityBuffer.depth.TransitionLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, vulkan->Device(), vulkan->PhysDevice(), commandPool);
-
-	// Now set up the depth attachments for the shade pass (TODO: may be completely unnecessary)
-	// Create Image and ImageView objects
-	visBuffShadeDepthImage.Create(vulkan->Swapchain().Extent().width, vulkan->Swapchain().Extent().height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, allocator);
-	visBuffShadeDepthImage.CreateImageView(vulkan->Device(), VK_IMAGE_ASPECT_DEPTH_BIT);
-
-	// Transition depth image for shader usage
-	visBuffShadeDepthImage.TransitionLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 }
 
 VkFormat VulkanApplication::FindDepthFormat()
@@ -1226,33 +1063,6 @@ void VulkanApplication::CreateVmaAllocator()
 }
 #pragma endregion
 
-#pragma region Texture Functions
-void VulkanApplication::CreateDepthSampler()
-{
-	VkSamplerCreateInfo samplerInfo = {};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_LINEAR; // Apply linear interpolation to over/under-sampled texels
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-	samplerInfo.anisotropyEnable = VK_TRUE; // Enable anisotropic filtering 
-	samplerInfo.maxAnisotropy = 16;
-	samplerInfo.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
-	samplerInfo.unnormalizedCoordinates = VK_FALSE; // Clamp texel coordinates to [0, 1]
-	samplerInfo.compareEnable = VK_FALSE;
-	samplerInfo.compareOp = VK_COMPARE_OP_NEVER;
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = 11.0f;
-
-	if (vkCreateSampler(vulkan->Device(), &samplerInfo, nullptr, &depthSampler) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create depth sampler");
-	}
-}
-
 #pragma region Descriptor Functions
 void VulkanApplication::CreateDescriptorPool()
 {
@@ -1289,7 +1099,7 @@ void VulkanApplication::CreateShadePassDescriptorSetLayout()
 	// Binding 1: Visibility Buffer
 	VkDescriptorSetLayoutBinding visBufferBinding = {};
 	visBufferBinding.binding = 1;
-	visBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	visBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 	visBufferBinding.descriptorCount = 1;
 	visBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -1361,7 +1171,7 @@ void VulkanApplication::CreateWritePassDescriptorSetLayout()
 void VulkanApplication::CreateShadePassDescriptorSets()
 {
 	// Set up sampler for visibility buffer image
-	visibilityBuffer.visibility.CreateSampler(vulkan->Device(), VK_SAMPLER_ADDRESS_MODE_REPEAT);
+	//visibilityBuffer.visibility.CreateSampler(vulkan->Device(), VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
 	// Create shade descriptor sets
 	std::vector<VkDescriptorSetLayout> shadingLayouts(vulkan->Swapchain().Images().size(), shadePassDescriptorSetLayout);
@@ -1385,9 +1195,9 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		// Terrain texture sampler
 		terrain.SetupTextureDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, shadePassDescriptorSets[i], 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
-		// Visibility Buffer sampler
-		visibilityBuffer.visibility.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-		visibilityBuffer.visibility.SetupDescriptorWriteSet(shadePassDescriptorSets[i], 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+		// Visibility Buffer attachment
+		visibilityBuffer.visibility.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_NULL_HANDLE);
+		visibilityBuffer.visibility.SetupDescriptorWriteSet(shadePassDescriptorSets[i], 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
 
 		// Terrain UBO
 		mvpUniformBuffer.SetupDescriptor(sizeof(UniformBufferObject), 0);

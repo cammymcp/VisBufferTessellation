@@ -25,11 +25,12 @@ layout(location = 0) in vec2 inScreenPos;
 
 // Out
 layout(location = 0) out vec4 outColour;
-layout(location = 1) out vec4 debug;
+layout(location = 2) out vec4 debug;
 
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
-layout (set = 0, binding = 1) uniform sampler2D inputVisibility;
+//layout (set = 0, binding = 1) uniform sampler2D inputVisibility;
+layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
 layout(set = 0, binding = 2) uniform UniformBufferObject 
 {
     mat4 mvp;
@@ -71,7 +72,8 @@ DerivativesOutput ComputePartialDerivatives(vec2 v[3])
 void main() 
 {
 	// Unpack triangle ID and draw ID from visibility buffer
-	vec4 visibilityRaw = texelFetch(inputVisibility, ivec2(gl_FragCoord.xy), 0);
+	//vec4 visibilityRaw = texelFetch(inputVisibility, ivec2(gl_FragCoord.xy), 0);
+	vec4 visibilityRaw = subpassLoad(inputVisibility);
 	uint DrawIdTriId = packUnorm4x8(visibilityRaw);		
 	debug = vec4(0.0f, 0.0f, 0.0f, 0.0f);
 

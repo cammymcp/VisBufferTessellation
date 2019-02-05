@@ -89,8 +89,7 @@ namespace vbt
 		void CreateVisBuffWritePipeline();
 		void CreateVisBuffShadePipelineLayout();
 		void CreateVisBuffWritePipelineLayout();
-		void CreateVisBuffWriteRenderPass();
-		void CreateVisBuffShadeRenderPass();
+		void CreateVisBuffRenderPass();
 		VkShaderModule CreateShaderModule(const std::vector<char>& code);
 #pragma endregion
 
@@ -103,9 +102,8 @@ namespace vbt
 
 #pragma region Command Buffer Functions
 		void CreateCommandPool();
-		void AllocateVisBuffShadeCommandBuffers();
-		void RecordVisBuffShadeCommandBuffers();
-		void RecordVisBuffWriteCommandBuffer();
+		void AllocateVisBuffCommandBuffers();
+		void RecordVisBuffCommandBuffers();
 #pragma endregion
 
 #pragma region Depth Buffer Functions
@@ -118,10 +116,6 @@ namespace vbt
 		void CreateUniformBuffers();
 		void UpdateMVPUniformBuffer();
 		void CreateVmaAllocator();
-#pragma endregion
-
-#pragma region Texture Functions
-		void CreateDepthSampler();
 #pragma endregion
 
 #pragma region Descriptor Functions
@@ -153,36 +147,25 @@ namespace vbt
 		VkPipelineCache pipelineCache;
 		VkPipelineLayout visBuffShadePipelineLayout;
 		VkPipelineLayout visBuffWritePipelineLayout;
-		VkRenderPass visBuffWriteRenderPass;
-		VkRenderPass visBuffShadeRenderPass;
+		VkRenderPass visBuffRenderPass;
 #pragma endregion
 
 #pragma region Drawing Objects
 		std::vector<VkFramebuffer> swapChainFramebuffers;
 		VisibilityBuffer visibilityBuffer;
-		VkSemaphore visBuffWriteSemaphore;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;
 		float frameTime = 0.0f;
 #pragma endregion
 
 #pragma region Command Buffer Objects
-		std::vector<VkCommandBuffer> visBuffShadeCommandBuffers;
-		VkCommandBuffer visBuffWriteCommandBuffer;
+		std::vector<VkCommandBuffer> visBuffCommandBuffers;
 		VkCommandPool commandPool;
-#pragma endregion
-
-#pragma region Depth Buffer Objects
-		Image visBuffShadeDepthImage;
 #pragma endregion
 
 #pragma region Buffer Objects
 		VmaAllocator allocator;
 		Buffer mvpUniformBuffer;
-#pragma endregion
-
-#pragma region Texture Objects 
-		VkSampler depthSampler;
 #pragma endregion
 
 #pragma region Model Objects
