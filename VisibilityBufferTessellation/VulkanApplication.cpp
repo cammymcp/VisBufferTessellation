@@ -131,6 +131,9 @@ void VulkanApplication::ApplySettings(AppSettings settings)
 	// Camera
 	camera.SetPosition(settings.cameraPos);
 	camera.SetRotation(settings.cameraRot);
+
+	// Pipeline
+	currentPipeline = settings.pipeline;
 }
 #pragma endregion
 

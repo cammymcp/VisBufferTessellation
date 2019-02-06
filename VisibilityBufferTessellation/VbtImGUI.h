@@ -17,10 +17,12 @@ namespace vbt
 	class VulkanApplication;
 
 	// ImGui Settings
+	enum PipelineType { VISIBILITYBUFFER, VB_TESSELLATION };
 	struct AppSettings
 	{
 		glm::vec3 cameraPos;
 		glm::vec3 cameraRot;
+		PipelineType pipeline;
 		bool updateSettings = false; // When true this class will call the UpdateSettings function of the appHandle
 	};
 

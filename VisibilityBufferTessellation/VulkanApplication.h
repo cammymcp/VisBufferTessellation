@@ -142,6 +142,7 @@ namespace vbt
 #pragma endregion
 
 #pragma region Graphics Pipeline Objects
+		PipelineType currentPipeline = VISIBILITYBUFFER;
 		VkPipeline visBuffShadePipeline;
 		VkPipeline visBuffWritePipeline;
 		VkPipelineCache pipelineCache;
