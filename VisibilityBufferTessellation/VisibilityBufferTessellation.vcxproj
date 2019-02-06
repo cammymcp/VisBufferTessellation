@@ -89,7 +89,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -106,7 +106,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -125,7 +125,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -146,7 +146,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -159,20 +159,54 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\Libraries\imgui-master\examples\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\..\Libraries\imgui-master\examples\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="..\..\Libraries\imgui-master\imgui.cpp" />
+    <ClCompile Include="..\..\Libraries\imgui-master\imgui_demo.cpp" />
+    <ClCompile Include="..\..\Libraries\imgui-master\imgui_draw.cpp" />
+    <ClCompile Include="..\..\Libraries\imgui-master\imgui_widgets.cpp" />
+    <ClCompile Include="Buffer.cpp" />
+    <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="Image.cpp" />
+    <ClCompile Include="VbtImGUI.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="PhysicalDevice.cpp" />
+    <ClCompile Include="SwapChain.cpp" />
+    <ClCompile Include="Terrain.cpp" />
+    <ClCompile Include="Texture.cpp" />
     <ClCompile Include="VulkanApplication.cpp" />
     <ClCompile Include="VulkanCore.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\Libraries\imgui-master\examples\imgui_impl_glfw.h" />
+    <ClInclude Include="..\..\Libraries\imgui-master\examples\imgui_impl_vulkan.h" />
+    <ClInclude Include="..\..\Libraries\imgui-master\imconfig.h" />
+    <ClInclude Include="..\..\Libraries\imgui-master\imgui.h" />
+    <ClInclude Include="..\..\Libraries\imgui-master\imgui_internal.h" />
+    <ClInclude Include="..\..\Libraries\imgui-master\imstb_rectpack.h" />
+    <ClInclude Include="..\..\Libraries\imgui-master\imstb_textedit.h" />
+    <ClInclude Include="..\..\Libraries\imgui-master\imstb_truetype.h" />
+    <ClInclude Include="Buffer.h" />
+    <ClInclude Include="Camera.h" />
+    <ClInclude Include="VbtImGUI.h" />
+    <ClInclude Include="VbtUtils.h" />
+    <ClInclude Include="Image.h" />
+    <ClInclude Include="Mesh.h" />
+    <ClInclude Include="PhysicalDevice.h" />
+    <ClInclude Include="SwapChain.h" />
+    <ClInclude Include="Terrain.h" />
+    <ClInclude Include="Texture.h" />
+    <ClInclude Include="VBTTypes.h" />
     <ClInclude Include="vk_mem_alloc.h" />
     <ClInclude Include="VulkanApplication.h" />
     <ClInclude Include="VulkanCore.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\deferred.frag" />
-    <None Include="shaders\deferred.vert" />
-    <None Include="shaders\geometry.frag" />
-    <None Include="shaders\geometry.vert" />
+    <None Include="shaders\visbuffshade.frag" />
+    <None Include="shaders\visbuffshade.vert" />
+    <None Include="shaders\visbuffwrite.frag" />
+    <None Include="shaders\visbuffwrite.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

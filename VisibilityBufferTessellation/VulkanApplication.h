@@ -3,106 +3,33 @@
 
 #include <array>
 #include <cstdlib>
-#include <fstream>
 #include <chrono>
 #include "vk_mem_alloc.h"
 #include "VulkanCore.h"
+#include "Buffer.h"
+#include "Terrain.h"
+#include "Texture.h"
+#include "Camera.h"
+#include "VbtImGUI.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // Ensure that GLM works in Vulkan's clip coordinates of 0.0 to 1.0
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/hash.hpp>
-
 #pragma region Constants
-const int WIDTH = 800;
-const int HEIGHT = 600;
+const int WIDTH = 1280;
+const int HEIGHT = 720;
 const std::string MODEL_PATH = "models/chalet.obj";
-const std::string TEXTURE_PATH = "textures/chalet.jpg";
 const VkBool32 WIREFRAME = VK_FALSE;
 const VkClearColorValue CLEAR_COLOUR = { 0.7f, 0.3f, 0.25f, 1.0f };
 #pragma endregion
 
 #pragma region Frame Buffers
-struct FrameBufferAttachment
-{
-	VkImage image;
-	VkImageView imageView;
-	VmaAllocation imageMemory;
-	VkFormat format;
-};
 struct VisibilityBuffer
 {
 	VkFramebuffer frameBuffer;
-	FrameBufferAttachment visibility, depth;
-};
-#pragma endregion
-
-#pragma region Buffer Data
-struct Vertex
-{
-	glm::vec3 pos;
-	glm::vec3 colour;
-	glm::vec2 texCoord;
-
-	static VkVertexInputBindingDescription GetBindingDescription()
-	{
-		VkVertexInputBindingDescription bindingDescription = {};
-		bindingDescription.binding = 0;
-		bindingDescription.stride = sizeof(Vertex);
-		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-		return bindingDescription;
-	}
-
-	// Create an attribute description PER ATTRIBUTE (currently pos colour and texcoords)
-	static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions()
-	{
-		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {};
-		attributeDescriptions[0].binding = 0;
-		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[0].offset = offsetof(Vertex, pos);
-
-		attributeDescriptions[1].binding = 0;
-		attributeDescriptions[1].location = 1;
-		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, colour);
-
-		attributeDescriptions[2].binding = 0;
-		attributeDescriptions[2].location = 2;
-		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
-
-		return attributeDescriptions;
-	}
-
-	bool operator==(const Vertex& other) const
-	{
-		return pos == other.pos && colour == other.colour && texCoord == other.texCoord;
-	}
-};
-
-// Hash calculation for Vertex struct 
-namespace std
-{
-	template<> struct hash<Vertex>
-	{
-		size_t operator()(Vertex const& vertex) const
-		{
-			return ((hash<glm::vec3>()(vertex.pos) ^
-				(hash<glm::vec3>()(vertex.colour) << 1)) >> 1) ^
-				(hash<glm::vec2>()(vertex.texCoord) << 1);
-		}
-	};
-}
-
-// 16-byte aligned vertex attributes. 
-typedef struct VertexAttributes
-{
-	glm::vec4 posXYZcolX;
-	glm::vec4 colYZtexXY;
+	vbt::Image visibility, depth;
 };
 #pragma endregion
 
@@ -128,15 +55,27 @@ namespace vbt
 			CleanUp();
 		}
 
+		VulkanCore* GetVulkanCore() { return vulkan; }
+		void ApplySettings(AppSettings settings);
+
+		const std::string title = "Visibility Buffer Tessellation";
 	private:
-
 		// Functions
-
 #pragma region Core Functions
 		void InitWindow();
 		void Init();
 		void Update();
 		void CleanUp();
+#pragma endregion
+
+#pragma region ImGui Functions
+		void InitImGui();
+#pragma endregion
+
+#pragma region Input Functions
+		static void ProcessKeyInput(GLFWwindow* window, int key, int scancode, int action, int mods);
+		static void ProcessMouseInput(GLFWwindow* window, int button, int action, int mods);
+		void UpdateMouse();
 #pragma endregion
 
 #pragma region Presentation and Swap Chain Functions
@@ -150,23 +89,21 @@ namespace vbt
 		void CreateVisBuffWritePipeline();
 		void CreateVisBuffShadePipelineLayout();
 		void CreateVisBuffWritePipelineLayout();
-		void CreateVisBuffWriteRenderPass();
-		void CreateVisBuffShadeRenderPass();
+		void CreateVisBuffRenderPass();
 		VkShaderModule CreateShaderModule(const std::vector<char>& code);
 #pragma endregion
 
 #pragma region Drawing Functions
+		void InitCamera();
 		void CreateFrameBuffers();
-		void CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, FrameBufferAttachment* attachment);
+		void CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, Image* attachment, VmaAllocator& allocator);
 		void DrawFrame();
 #pragma endregion
 
 #pragma region Command Buffer Functions
 		void CreateCommandPool();
-		void RecordVisBuffShadeCommandBuffers();
-		void RecordVisBuffWriteCommandBuffer();
-		VkCommandBuffer BeginSingleTimeCommands();
-		void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+		void AllocateVisBuffCommandBuffers();
+		void RecordVisBuffCommandBuffers();
 #pragma endregion
 
 #pragma region Depth Buffer Functions
@@ -176,28 +113,9 @@ namespace vbt
 #pragma endregion
 
 #pragma region Buffer Functions
-		void CreateVertexBuffer();
-		void CreateAttributeBuffer();
-		void CreateIndexBuffer();
 		void CreateUniformBuffers();
 		void UpdateMVPUniformBuffer();
-		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaMemoryUsage allocUsage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VmaAllocation& allocation);
 		void CreateVmaAllocator();
-		void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-#pragma endregion
-
-#pragma region Texture Functions
-		void CreateTextureImage();
-		void CreateTextureImageView();
-		void CreateTextureSampler();
-		void CreateDepthSampler();
-		void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkMemoryPropertyFlags properties, VkImage& image, VmaAllocation& allocation);
-		void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout srcLayout, VkImageLayout dstLayout);
-		void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-#pragma endregion
-
-#pragma region Model Functions
-		void LoadModel();
 #pragma endregion
 
 #pragma region Descriptor Functions
@@ -209,14 +127,18 @@ namespace vbt
 #pragma endregion
 
 #pragma region Other Functions
-		static std::vector<char> ReadFile(const std::string& filename);
 		static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 #pragma endregion
 
 		// Handles and Containers
 #pragma region Core Objects
 		GLFWwindow* window;
-		vbt::VulkanCore* vulkan;
+		VulkanCore* vulkan;
+		Camera camera;
+#pragma endregion
+
+#pragma region ImGui Objects
+		ImGUI imGui;
 #pragma endregion
 
 #pragma region Graphics Pipeline Objects
@@ -225,54 +147,30 @@ namespace vbt
 		VkPipelineCache pipelineCache;
 		VkPipelineLayout visBuffShadePipelineLayout;
 		VkPipelineLayout visBuffWritePipelineLayout;
-		VkRenderPass visBuffWriteRenderPass;
-		VkRenderPass visBuffShadeRenderPass;
+		VkRenderPass visBuffRenderPass;
 #pragma endregion
 
 #pragma region Drawing Objects
 		std::vector<VkFramebuffer> swapChainFramebuffers;
 		VisibilityBuffer visibilityBuffer;
-		VkSemaphore visBuffWriteSemaphore;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;
+		float frameTime = 0.0f;
 #pragma endregion
 
 #pragma region Command Buffer Objects
-		std::vector<VkCommandBuffer> visBuffShadeCommandBuffers;
-		VkCommandBuffer visBuffWriteCommandBuffer;
+		std::vector<VkCommandBuffer> visBuffCommandBuffers;
 		VkCommandPool commandPool;
-#pragma endregion
-
-#pragma region Depth Buffer Objects
-		VkImage visBuffShadeDepthImage;
-		VmaAllocation visBuffShadeDepthImageMemory;
-		VkImageView visBuffShadeDepthImageView;
 #pragma endregion
 
 #pragma region Buffer Objects
 		VmaAllocator allocator;
-		VkBuffer vertexBuffer;
-		VkBuffer indexBuffer;
-		VkBuffer vertexAttributeBuffer;
-		VmaAllocation indexBufferAllocation;
-		VmaAllocation vertexBufferAllocation;
-		VmaAllocation vertexAttributeBufferAllocation;
-		VkBuffer mvpUniformBuffer;
-		VmaAllocation mvpUniformBufferAllocation;
-#pragma endregion
-
-#pragma region Texture Objects 
-		VkImage textureImage;
-		VmaAllocation textureImageMemory;
-		VkImageView textureImageView;
-		VkSampler textureSampler;
-		VkSampler depthSampler;
+		Buffer mvpUniformBuffer;
 #pragma endregion
 
 #pragma region Model Objects
-		std::vector<Vertex> vertices;
-		std::vector<uint32_t> indices;
-		std::vector<VertexAttributes> vertexAttributeData;
+		//Mesh chalet;
+		Terrain terrain;
 #pragma endregion
 
 #pragma region Descriptor Objects
@@ -283,8 +181,14 @@ namespace vbt
 		VkDescriptorSetLayout writePassDescriptorSetLayout;
 #pragma endregion
 
+#pragma region Input Objects
+		glm::vec2 mousePosition = glm::vec3();
+		bool mouseLeftDown = false;
+		bool mouseRightDown = false;
+#pragma endregion
+
 #pragma region Debug Objects
-		FrameBufferAttachment debugAttachment;
+		Image debugAttachment;
 #pragma endregion
 	};
 }
