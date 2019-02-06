@@ -497,10 +497,13 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
 	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass (just vis buff atm)
+	VkPipelineColorBlendAttachmentState colourBlendAttachment = {};
+	colourBlendAttachment.colorWriteMask = 0xf;
+	colourBlendAttachment.blendEnable = VK_FALSE;
 	VkPipelineColorBlendAttachmentState visBlendAttachment = {};
 	visBlendAttachment.colorWriteMask = 0xf;
 	visBlendAttachment.blendEnable = VK_FALSE;
-	std::array<VkPipelineColorBlendAttachmentState, 1> blendAttachments = { visBlendAttachment };
+	std::array<VkPipelineColorBlendAttachmentState, 2> blendAttachments = { colourBlendAttachment, visBlendAttachment };
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
@@ -587,13 +590,13 @@ void VulkanApplication::CreateVisBuffWritePipelineLayout()
 void VulkanApplication::CreateVisBuffRenderPass()
 {
 	// Setup images for use as frame buffer attachments
-	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &visibilityBuffer.visibility, allocator); // 32 bit uint will be unpacked into four 8bit floats
+	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &visibilityBuffer.visibility, allocator); // 32 bit uint will be unpacked into four 8bit floats
 	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &debugAttachment, allocator);
 	CreateDepthResources();
 
 	// Create attachment descriptions
 	std::array<VkAttachmentDescription, 4> attachments = {};
-	// Color attachment
+	// Swapchain image attachment
 	attachments[0].format = vulkan->Swapchain().ImageFormat();
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -609,8 +612,8 @@ void VulkanApplication::CreateVisBuffRenderPass()
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	// Debug Attachment
 	attachments[2].format = debugAttachment.Format();
 	attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -676,13 +679,13 @@ void VulkanApplication::CreateVisBuffRenderPass()
 	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-	// This dependency transitions the input attachment from color attachment to shader read
+	// Transition the vis buffer from color attachment to shader read
 	dependencies[1].srcSubpass = 0;
 	dependencies[1].dstSubpass = 1;
 	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
 	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
 	dependencies[2].srcSubpass = 0;

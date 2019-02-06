@@ -16,8 +16,8 @@ const int MAX_FRAMES_IN_FLIGHT = 1;
 #pragma region Validation Layers
 const std::vector<const char*> validationLayers =
 {
-	"VK_LAYER_LUNARG_standard_validation",
-	"VK_LAYER_RENDERDOC_Capture"
+	"VK_LAYER_LUNARG_standard_validation"/*,
+	"VK_LAYER_RENDERDOC_Capture"*/
 };
 
 #ifdef NDEBUG
