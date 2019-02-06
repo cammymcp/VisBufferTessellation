@@ -364,7 +364,7 @@ void VulkanApplication::CreateVisBuffShadePipeline()
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
-	colourBlending.attachmentCount = SCAST_U32(blendAttachments.size());
+	colourBlending.attachmentCount = 2;
 	colourBlending.pAttachments = blendAttachments.data();
 
 	// Dynamic State
@@ -503,11 +503,14 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	VkPipelineColorBlendAttachmentState visBlendAttachment = {};
 	visBlendAttachment.colorWriteMask = 0xf;
 	visBlendAttachment.blendEnable = VK_FALSE;
-	std::array<VkPipelineColorBlendAttachmentState, 2> blendAttachments = { colourBlendAttachment, visBlendAttachment };
+	VkPipelineColorBlendAttachmentState debugBlendAttachment = {};
+	debugBlendAttachment.colorWriteMask = 0xf;
+	debugBlendAttachment.blendEnable = VK_FALSE;
+	std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachments = { colourBlendAttachment, visBlendAttachment, debugBlendAttachment };
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
-	colourBlending.attachmentCount = SCAST_U32(blendAttachments.size());
+	colourBlending.attachmentCount = 3;
 	colourBlending.pAttachments = blendAttachments.data();
 
 	// Dynamic State
@@ -590,7 +593,7 @@ void VulkanApplication::CreateVisBuffWritePipelineLayout()
 void VulkanApplication::CreateVisBuffRenderPass()
 {
 	// Setup images for use as frame buffer attachments
-	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &visibilityBuffer.visibility, allocator); // 32 bit uint will be unpacked into four 8bit floats
+	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visibility, allocator); // 32 bit uint will be unpacked into four 8bit floats
 	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &debugAttachment, allocator);
 	CreateDepthResources();
 
@@ -605,17 +608,17 @@ void VulkanApplication::CreateVisBuffRenderPass()
 	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-	// Vis Buff attachment
-	attachments[1].format = visibilityBuffer.visibility.Format();
+	// Debug Attachment
+	attachments[1].format = debugAttachment.Format();
 	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[1].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	// Debug Attachment
-	attachments[2].format = debugAttachment.Format();
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	// Vis Buff attachment
+	attachments[2].format = visibilityBuffer.visibility.Format();
 	attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
 	attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -641,7 +644,8 @@ void VulkanApplication::CreateVisBuffRenderPass()
 	// Attachment references 
 	std::vector<VkAttachmentReference> writeColorReferences;
 	writeColorReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-	writeColorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+	writeColorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Debug attachment
+	writeColorReferences.push_back({ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Visibility Buffer attachment
 	VkAttachmentReference depthReference = { 3, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
 
 	// Subpass Description
@@ -654,10 +658,11 @@ void VulkanApplication::CreateVisBuffRenderPass()
 	// --------------------------------------
 	// Attachment references 
 	std::vector<VkAttachmentReference> shadeColourReferences;
+	VkAttachmentReference debugReference = {};
 	shadeColourReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-	shadeColourReferences.push_back({ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Debug attachment
+	shadeColourReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Debug attachment
 	VkAttachmentReference inputReferences[1];
-	inputReferences[0] = { 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+	inputReferences[0] = { 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }; // Visibility Buffer attachment
 
 	// Subpass Description
 	subpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -758,8 +763,8 @@ void VulkanApplication::CreateFrameBuffers()
 	for (size_t i = 0; i < vulkan->Swapchain().ImageViews().size(); i++)
 	{
 		attachments[0] = vulkan->Swapchain().ImageViews()[i];
-		attachments[1] = visibilityBuffer.visibility.ImageView();
-		attachments[2] = debugAttachment.ImageView();
+		attachments[1] = debugAttachment.ImageView();
+		attachments[2] = visibilityBuffer.visibility.ImageView();
 		attachments[3] = visibilityBuffer.depth.ImageView();
 
 		if (vkCreateFramebuffer(vulkan->Device(), &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) 
@@ -874,7 +879,7 @@ void VulkanApplication::CreateCommandPool()
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-	poolInfo.flags = 0; // Optional. Allows command buffers to be reworked at runtime
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Optional. Allows command buffers to be reworked at runtime
 
 	if (vkCreateCommandPool(vulkan->Device(), &poolInfo, nullptr, &commandPool) != VK_SUCCESS)
 	{
@@ -1069,13 +1074,15 @@ void VulkanApplication::CreateVmaAllocator()
 #pragma region Descriptor Functions
 void VulkanApplication::CreateDescriptorPool()
 {
-	std::array<VkDescriptorPoolSize, 3> poolSizes = {};
+	std::array<VkDescriptorPoolSize, 4> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = SCAST_U32((vulkan->Swapchain().Images().size())) + 1; // Extra mvp ubo for the write pass
+	poolSizes[0].descriptorCount = SCAST_U32((vulkan->Swapchain().Images().size())) + 1; // mvp UBO per swapchain image plus extra mvp ubo for the write pass
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 2) + 1; // 2 sampled images per swapchain image plus heightmap for write pass
+	poolSizes[1].descriptorCount = SCAST_U32(vulkan->Swapchain().Images().size()) + 1; // 1 sampled image per swapchain image plus heightmap for write pass
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	poolSizes[2].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size())) * 2; // 2 storage buffers per swapchain image
+	poolSizes[3].type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+	poolSizes[3].descriptorCount = SCAST_U32(vulkan->Swapchain().Images().size()); // 1 input attachment per swapchain image (vis buff)
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;

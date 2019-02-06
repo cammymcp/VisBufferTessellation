@@ -24,7 +24,7 @@ namespace vbt
 		ImGui_ImplGlfw_InitForVulkan(window, true);
 		ImGui_ImplVulkan_InitInfo initInfo = *info;
 		initInfo.DescriptorPool = descriptorPool;
-		ImGui_ImplVulkan_Init(&initInfo, renderPass);
+		ImGui_ImplVulkanVbt_Init(&initInfo, renderPass);
 
 		// Load Fonts
 		vbt::PhysicalDevice physDevice = appHandle->GetVulkanCore()->PhysDevice();
@@ -122,56 +122,6 @@ namespace vbt
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 	}
 
-	//void ImGUI::AllocateCommandBuffers(VkDevice device, VkCommandPool commandPool, size_t numBuffers)
-	//{
-	//	commandBuffers.resize(numBuffers);
-	//
-	//	VkCommandBufferAllocateInfo allocInfo = {};
-	//	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	//	allocInfo.commandPool = commandPool;
-	//	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	//	allocInfo.commandBufferCount = SCAST_U32(commandBuffers.size());
-	//
-	//	if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS)
-	//	{
-	//		throw std::runtime_error("Failed to allocate imGUI command buffers");
-	//	}
-	//
-	//	// Create semaphore objects
-	//	semaphores.resize(MAX_FRAMES_IN_FLIGHT);
-	//	VkSemaphoreCreateInfo semaphoreInfo = {};
-	//	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	//	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-	//	{
-	//		if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &semaphores[i]) != VK_SUCCESS)
-	//		{
-	//			throw std::runtime_error("Failed to create imgui semaphore for a frame");
-	//		}
-	//	}
-	//}
-	//
-	//void ImGUI::UpdateCommandBuffer(int index)
-	//{
-	//	VkCommandBufferBeginInfo beginInfo = {};
-	//	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	//	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-	//	beginInfo.pInheritanceInfo = nullptr; // Optional
-	//
-	//	if (vkBeginCommandBuffer(commandBuffers[index], &beginInfo) != VK_SUCCESS)
-	//	{
-	//		throw std::runtime_error("Failed to begin recording imgui command buffer");
-	//	}
-	//
-	//	// Record Imgui Draw Data and draw funcs into command buffer
-	//	DrawFrame(commandBuffers[index]);
-	//
-	//	// And end recording of command buffers
-	//	if (vkEndCommandBuffer(commandBuffers[index]) != VK_SUCCESS)
-	//	{
-	//		throw std::runtime_error("Failed to update imgui command buffer");
-	//	}
-	//}
-
 	void ImGUI::ResetFrameGraph()
 	{
 		frameTimes.fill(0.0f);
@@ -181,6 +131,7 @@ namespace vbt
 
 	void ImGUI::CleanUp()
 	{
+		vkDestroyDescriptorPool(appHandle->GetVulkanCore()->Device(), descriptorPool, nullptr);
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();

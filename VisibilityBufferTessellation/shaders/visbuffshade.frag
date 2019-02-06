@@ -25,7 +25,7 @@ layout(location = 0) in vec2 inScreenPos;
 
 // Out
 layout(location = 0) out vec4 outColour;
-layout(location = 2) out vec4 debug;
+layout(location = 1) out vec4 debug;
 
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
@@ -75,7 +75,7 @@ void main()
 	//vec4 visibilityRaw = texelFetch(inputVisibility, ivec2(gl_FragCoord.xy), 0);
 	vec4 visibilityRaw = subpassLoad(inputVisibility);
 	uint DrawIdTriId = packUnorm4x8(visibilityRaw);		
-	debug = vec4(0.0f, 0.0f, 0.0f, 0.0f);
+	debug = vec4(1.0f, 0.0f, 0.0f, 1.0f);
 
 	// If this pixel doesn't contain triangle data, return early
 	if (DrawIdTriId != 0)

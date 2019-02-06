@@ -32,23 +32,15 @@ namespace vbt
 		void CreateVulkanResources();
 		void Update(float frameTime, glm::vec3 cameraPos, glm::vec3 cameraRot);
 		void DrawFrame(VkCommandBuffer commandBuffer);
-		//void AllocateCommandBuffers(VkDevice device, VkCommandPool commandPool, size_t numBuffers);
-		//void UpdateCommandBuffer(int index);
 		void CleanUp();
 
-		//std::vector<VkCommandBuffer> CommandBuffers() const { return commandBuffers; }
-		//std::vector<VkSemaphore> Semaphores() const { return semaphores; }
 	private:
 		void ResetFrameGraph();
 
-		VulkanApplication* appHandle;
-
-		// Vulkan Objects
+		// Vulkan Resources
 		VkDescriptorPool descriptorPool;
-		//std::vector<VkCommandBuffer> commandBuffers;
-		//std::vector<VkSemaphore> semaphores;
 
-		bool checkboxTest = false;
+		VulkanApplication* appHandle;
 		std::array<float, 50> frameTimes{};
 		float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
 	};
