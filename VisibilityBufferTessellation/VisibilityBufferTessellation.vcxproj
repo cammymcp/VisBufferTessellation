@@ -205,6 +205,12 @@
   <ItemGroup>
     <None Include="shaders\visbuffshade.frag" />
     <None Include="shaders\visbuffshade.vert" />
+    <None Include="shaders\visbufftesswrite.tese" />
+    <None Include="shaders\visbufftesswrite.tesc" />
+    <None Include="shaders\visbufftessshade.frag" />
+    <None Include="shaders\visbufftessshade.vert" />
+    <None Include="shaders\visbufftesswrite.frag" />
+    <None Include="shaders\visbufftesswrite.vert" />
     <None Include="shaders\visbuffwrite.frag" />
     <None Include="shaders\visbuffwrite.vert" />
   </ItemGroup>

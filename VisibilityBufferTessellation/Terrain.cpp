@@ -3,12 +3,12 @@
 
 namespace vbt
 {
-	void Terrain::Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool)
+	void Terrain::Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool, bool tessellated)
 	{
 		texture.LoadAndCreate(TEXTURE_PATH, allocator, device, physDevice, cmdPool);
 		heightmap.LoadAndCreate(HEIGHTMAP_PATH, allocator, device, physDevice, cmdPool);
 
-		Generate();
+		Generate(tessellated);
 
 		CreateBuffers(allocator, device, physDevice, cmdPool);
 	}
@@ -32,7 +32,7 @@ namespace vbt
 		heightmap.CleanUp(allocator, device);
 	}
 
-	void Terrain::Generate()
+	void Terrain::Generate(bool tessellated)
 	{
 		// Generate vertices
 		for (auto x = 0; x < PATCH_SIZE; x++)
@@ -53,20 +53,42 @@ namespace vbt
 			}
 		}
 		
-		// Generate Indices
-		const uint32_t patchWidth = PATCH_SIZE - 1;
-		indices.resize(patchWidth * patchWidth * 6);
-		for (auto x = 0; x < patchWidth; x++)
+		// Generate indices depending on whether this terrain is set to be tessellated 
+		if (!tessellated)
 		{
-			for (auto y = 0; y < patchWidth; y++)
+			// Triangle list vertices
+			const uint32_t patchWidth = PATCH_SIZE - 1;
+			indices.resize(patchWidth * patchWidth * 6);
+			for (auto x = 0; x < patchWidth; x++)
 			{
-				uint32_t index = (x + y * patchWidth) * 6;
-				indices[index] = (x + y * PATCH_SIZE); // bottom left
-				indices[index + 1] = indices[index] + PATCH_SIZE; // bottom right
-				indices[index + 2] = indices[index + 1] + 1; // top right
-				indices[index + 3] = indices[index] + 1; // top left
-				indices[index + 4] = (x + y * PATCH_SIZE); // bottom left
-				indices[index + 5] = indices[index + 1] + 1; // top right
+				for (auto y = 0; y < patchWidth; y++)
+				{
+					uint32_t index = (x + y * patchWidth) * 6;
+					indices[index] = (x + y * PATCH_SIZE); // bottom left
+					indices[index + 1] = indices[index] + PATCH_SIZE; // bottom right
+					indices[index + 2] = indices[index + 1] + 1; // top right
+					indices[index + 3] = indices[index] + 1; // top left
+					indices[index + 4] = (x + y * PATCH_SIZE); // bottom left
+					indices[index + 5] = indices[index + 1] + 1; // top right
+				}
+			}
+		}
+		else
+		{
+			// Quad tessellation patches
+			const uint32_t w = (PATCH_SIZE - 1);
+			const uint32_t indexCount = w * w * 4;
+			indices.resize(indexCount);
+			for (auto x = 0; x < w; x++)
+			{
+				for (auto y = 0; y < w; y++)
+				{
+					uint32_t index = (x + y * w) * 4;
+					indices[index] = (x + y * PATCH_SIZE);
+					indices[index + 1] = indices[index] + PATCH_SIZE;
+					indices[index + 2] = indices[index + 1] + 1;
+					indices[index + 3] = indices[index] + 1;
+				}
 			}
 		}
 	}
