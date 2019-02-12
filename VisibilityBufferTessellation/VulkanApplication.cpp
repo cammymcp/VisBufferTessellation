@@ -39,7 +39,7 @@ void VulkanApplication::Init()
 	CreateVisBuffShadePipeline();
 	CreateVisBuffTessWritePipeline();
 	CreateVisBuffTessShadePipeline();
-	terrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, false);
+	terrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
 	//chalet.LoadFromFile(MODEL_PATH);
 	CreateUniformBuffers();
 	CreateDescriptorPool();
@@ -1088,8 +1088,8 @@ VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& co
 void VulkanApplication::InitCamera()
 {
 	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 500.0f, true);
-	camera.SetRotation(glm::vec3(0.0f, 0.0f, 0.0f), true);
-	camera.SetPosition(glm::vec3(0.0f, -10.0f, 0.0f), true);
+	camera.SetRotation(glm::vec3(25.0f, 310.0f, 0.0f), true);
+	camera.SetPosition(glm::vec3(-2.0f, -6.0f, -1.5f), true);
 }
 
 void VulkanApplication::CreateFrameBuffers()
@@ -1448,7 +1448,7 @@ void VulkanApplication::UpdateUniformBuffers()
 
 	// Map tessellation factor to ubo
 	TessFactorUBO tessUbo = {};
-	tessUbo.tessellationFactor = 3.0f;
+	tessUbo.tessellationFactor = 2.0f;
 	tessFactorBuffer.MapData(&tessUbo, allocator);
 }
 

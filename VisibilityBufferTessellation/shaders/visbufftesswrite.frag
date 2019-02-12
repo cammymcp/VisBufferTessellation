@@ -29,6 +29,6 @@ void main()
 	outColour = vec4(0.0); 
 	debug = vec4(0.0);
 
-	// Fill visibility buffer
+	// Fill visibility buffer (gl_PrimitiveID in a tessellation pipeline refers to the Patch ID)
 	visBuff = unpackUnorm4x8(calculateOutputVBID(0, gl_PrimitiveID + 1)); // Offset primitive ID so that the first primitive in each draw call is not lost due to being 0
 }

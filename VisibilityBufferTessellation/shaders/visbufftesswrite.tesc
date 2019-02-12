@@ -8,13 +8,13 @@ layout(binding = 0) uniform UniformBufferObject
 	float tessellationFactor;
 } ubo;
 
-layout (vertices = 4) out;
+layout (vertices = 3) out;
  
 layout (location = 0) in vec3 inNormal[];
 layout (location = 1) in vec2 inTexCoords[];
  
-layout (location = 0) out vec3 outNormal[4];
-layout (location = 1) out vec2 outTexCoords[4];
+layout (location = 0) out vec3 outNormal[3];
+layout (location = 1) out vec2 outTexCoords[3];
 
 void main()
 {
@@ -25,20 +25,16 @@ void main()
 			gl_TessLevelOuter[0] = ubo.tessellationFactor;
 			gl_TessLevelOuter[1] = ubo.tessellationFactor;
 			gl_TessLevelOuter[2] = ubo.tessellationFactor;
-			gl_TessLevelOuter[3] = ubo.tessellationFactor;
-			gl_TessLevelInner[0] = mix(gl_TessLevelOuter[0], gl_TessLevelOuter[3], 0.5);
-			gl_TessLevelInner[1] = mix(gl_TessLevelOuter[2], gl_TessLevelOuter[1], 0.5);
+			gl_TessLevelInner[0] = ubo.tessellationFactor;
 		}
 		else
 		{
 			// Tessellation factor can be set to zero by example
 			// to demonstrate a simple passthrough
 			gl_TessLevelInner[0] = 1.0;
-			gl_TessLevelInner[1] = 1.0;
 			gl_TessLevelOuter[0] = 1.0;
 			gl_TessLevelOuter[1] = 1.0;
 			gl_TessLevelOuter[2] = 1.0;
-			gl_TessLevelOuter[3] = 1.0;
 		}
 	}
 
