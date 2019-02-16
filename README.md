@@ -11,6 +11,7 @@ In doing so, more information must be stored to the visibility buffer, and hence
 by generating detail by tessellation may prove beneficial. 
 
 Further resources surrounding the visibility buffer and it's implementation can be found via the following resources:
+
 Burns and Hunt (2013): http://jcgt.org/published/0002/02/04/
 Schied and Daschbacher (2015): http://cg.ivd.kit.edu/publications/2015/dais/DAIS.pdf
 Engel (2016, 2018): https://diaryofagraphicsprogrammer.blogspot.com/2018/03/triangle-visibility-buffer.html
