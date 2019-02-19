@@ -29,8 +29,8 @@ layout(location = 1) out vec4 debug;
 
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
-//layout (set = 0, binding = 1) uniform sampler2D inputVisibility;
 layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
+layout (input_attachment_index = 1, set = 0, binding = 5) uniform subpassInput inputTessCoords;
 layout(set = 0, binding = 2) uniform UniformBufferObject 
 {
     mat4 mvp;

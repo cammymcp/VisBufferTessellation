@@ -26,7 +26,12 @@ const std::string MODEL_PATH = "models/chalet.obj";
 #pragma region Frame Buffers
 struct VisibilityBuffer
 {
-	vbt::Image visibility, depth;
+	vbt::Image visibility;
+};
+
+struct TessellationVisibilityBuffer
+{
+	vbt::Image visibility, tessCoords;
 };
 #pragma endregion
 
@@ -69,7 +74,7 @@ namespace vbt
 #pragma endregion
 
 #pragma region ImGui Functions
-		void InitImGui();
+		void InitImGui(VkRenderPass renderPass);
 #pragma endregion
 
 #pragma region Input Functions
@@ -89,11 +94,11 @@ namespace vbt
 		void CreateVisBuffWritePipeline();
 		void CreateVisBuffShadePipelineLayout();
 		void CreateVisBuffWritePipelineLayout();
-		void CreateVisBuffTessShadePipeline();
-		void CreateVisBuffTessWritePipeline();
-		void CreateVisBuffTessShadePipelineLayout();
-		void CreateVisBuffTessWritePipelineLayout();
-		void CreateVisBuffRenderPass();
+		void CreateTessShadePipeline();
+		void CreateTessWritePipeline();
+		void CreateTessShadePipelineLayout();
+		void CreateTessWritePipelineLayout();
+		void CreateRenderPasses();
 		VkShaderModule CreateShaderModule(const std::vector<char>& code);
 #pragma endregion
 
@@ -106,8 +111,8 @@ namespace vbt
 
 #pragma region Command Buffer Functions
 		void CreateCommandPool();
-		void AllocateVisBuffCommandBuffers();
-		void RecordVisBuffCommandBuffers();
+		void AllocateCommandBuffers();
+		void RecordCommandBuffers();
 #pragma endregion
 
 #pragma region Depth Buffer Functions
@@ -124,11 +129,11 @@ namespace vbt
 
 #pragma region Descriptor Functions
 		void CreateDescriptorPool();
-		void CreateShadePassDescriptorSetLayout();
+		void CreateShadePassDescriptorSetLayouts();
+		void CreateShadePassDescriptorSets();
 		void CreateWritePassDescriptorSetLayout();
-		void CreateTessWritePassDescriptorSetLayout();
-		void CreateShadePassDescriptorSets(); 
 		void CreateWritePassDescriptorSet();
+		void CreateTessWritePassDescriptorSetLayout();
 		void CreateTessWritePassDescriptorSet();
 #pragma endregion
 
@@ -145,30 +150,36 @@ namespace vbt
 		VkCommandPool commandPool;
 		VkDescriptorPool descriptorPool;
 		VmaAllocator allocator;
-		VkRenderPass visBuffRenderPass;
-		std::vector<VkCommandBuffer> visBuffCommandBuffers;
-		std::vector<VkDescriptorSet> visBuffShadePassDescSets;
-		VkDescriptorSetLayout visBuffShadePassDescSetLayout;
-		VkDescriptorSet visBuffWritePassDescSet;
-		VkDescriptorSetLayout visBuffWritePassDescSetLayout;
-		VkDescriptorSet visBuffTessWritePassDescSet;
-		VkDescriptorSetLayout visBuffTessWritePassDescSetLayout;
-		std::vector<VkFramebuffer> visBuffFramebuffers;
+		std::vector<VkCommandBuffer> commandBuffers;
+		vbt::Image depthImage;
 #pragma endregion
 
 #pragma region Visibility Buffer Pipeline 
 		VisibilityBuffer visibilityBuffer;
+		VkRenderPass visBuffRenderPass;
 		VkPipeline visBuffShadePipeline;
 		VkPipeline visBuffWritePipeline;
 		VkPipelineLayout visBuffShadePipelineLayout;
 		VkPipelineLayout visBuffWritePipelineLayout;
+		std::vector<VkFramebuffer> visBuffFramebuffers;
+		VkDescriptorSet visBuffWritePassDescSet;
+		VkDescriptorSetLayout visBuffWritePassDescSetLayout;
+		std::vector<VkDescriptorSet> visBuffShadePassDescSets;
+		VkDescriptorSetLayout visBuffShadePassDescSetLayout;
 #pragma endregion
 
 #pragma region Visibility Buffer + Tessellation Pipeline
-		VkPipeline visBuffTessShadePipeline;
-		VkPipeline visBuffTessWritePipeline;
-		VkPipelineLayout visBuffTessShadePipelineLayout;
-		VkPipelineLayout visBuffTessWritePipelineLayout;
+		TessellationVisibilityBuffer tessVisibilityBuffer;
+		VkRenderPass tessRenderPass;
+		VkPipeline tessShadePipeline;
+		VkPipeline tessWritePipeline;
+		VkPipelineLayout tessShadePipelineLayout;
+		VkPipelineLayout tessWritePipelineLayout;
+		std::vector<VkFramebuffer> tessFramebuffers;
+		VkDescriptorSet tessWritePassDescSet;
+		VkDescriptorSetLayout tessWritePassDescSetLayout;
+		std::vector<VkDescriptorSet> tessShadePassDescSets;
+		VkDescriptorSetLayout tessShadePassDescSetLayout;
 #pragma endregion
 
 #pragma region Geometry

@@ -15,6 +15,7 @@ layout (location = 1) in vec2 inTexCoords;
 layout(location = 0) out vec4 outColour;
 layout(location = 1) out vec4 debug;
 layout(location = 2) out vec4 visBuff;
+layout(location = 3) out vec4 tessCoordsBuff;
 
 // Engel's packing function (without alpha bit)
 uint calculateOutputVBID(uint drawID, uint primitiveID)
@@ -31,4 +32,5 @@ void main()
 
 	// Fill visibility buffer (gl_PrimitiveID in a tessellation pipeline refers to the Patch ID)
 	visBuff = unpackUnorm4x8(calculateOutputVBID(0, gl_PrimitiveID + 1)); // Offset primitive ID so that the first primitive in each draw call is not lost due to being 0
+	tessCoordsBuff = vec4(0.0f, 1.0f, 0.0f, 1.0f);
 }
