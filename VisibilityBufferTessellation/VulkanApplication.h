@@ -90,12 +90,10 @@ namespace vbt
 
 #pragma region Graphics Pipeline Functions
 		void CreatePipelineCache();
-		void CreateVisBuffShadePipeline();
-		void CreateVisBuffWritePipeline();
+		void CreateShadePipelines();
+		void CreateWritePipelines();
 		void CreateVisBuffShadePipelineLayout();
 		void CreateVisBuffWritePipelineLayout();
-		void CreateTessShadePipeline();
-		void CreateTessWritePipeline();
 		void CreateTessShadePipelineLayout();
 		void CreateTessWritePipelineLayout();
 		void CreateRenderPasses();
@@ -131,7 +129,7 @@ namespace vbt
 		void CreateDescriptorPool();
 		void CreateShadePassDescriptorSetLayouts();
 		void CreateShadePassDescriptorSets();
-		void CreateWritePassDescriptorSetLayout();
+		void CreateVisBuffWritePassDescriptorSetLayout();
 		void CreateWritePassDescriptorSet();
 		void CreateTessWritePassDescriptorSetLayout();
 		void CreateTessWritePassDescriptorSet();
@@ -183,7 +181,6 @@ namespace vbt
 #pragma endregion
 
 #pragma region Geometry
-		//Mesh chalet;
 		Terrain terrain;
 		Buffer mvpUniformBuffer;
 		Buffer tessFactorBuffer;

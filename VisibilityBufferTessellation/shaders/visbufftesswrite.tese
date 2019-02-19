@@ -19,6 +19,7 @@ layout (location = 1) in vec2 inTexCoords[];
  
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec2 outTexCoords;
+layout (location = 2) out vec3 tessCoords;
 
 vec2 interpolate2D(vec2 v0, vec2 v1, vec2 v2)
 {
@@ -47,4 +48,5 @@ void main()
 
 	// Perspective projection
 	gl_Position = ubo.mvp * vec4(pos, 1.0);
+	tessCoords = gl_TessCoord;
 }

@@ -12,7 +12,7 @@ void VulkanApplication::InitWindow()
 	// Init glfw and do not create an OpenGL context
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 	// Create window
 	window = glfwCreateWindow(WIDTH, HEIGHT, title.c_str(), nullptr, nullptr);
@@ -32,15 +32,12 @@ void VulkanApplication::Init()
 	CreateCommandPool();
 	CreateRenderPasses();
 	CreateShadePassDescriptorSetLayouts();
-	CreateWritePassDescriptorSetLayout();
+	CreateVisBuffWritePassDescriptorSetLayout();
 	CreateTessWritePassDescriptorSetLayout();
 	CreatePipelineCache();
-	CreateVisBuffWritePipeline();
-	CreateVisBuffShadePipeline();
-	CreateTessWritePipeline();
-	CreateTessShadePipeline();
+	CreateWritePipelines();
+	CreateShadePipelines();
 	terrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
-	//chalet.LoadFromFile(MODEL_PATH);
 	CreateUniformBuffers();
 	CreateDescriptorPool();
 	CreateFrameBuffers();
@@ -256,13 +253,8 @@ void VulkanApplication::RecreateSwapChain()
 	vulkan->RecreateSwapchain(window);
 	CreateRenderPasses();
 	CreatePipelineCache();
-	CreateVisBuffWritePipeline();
-	CreateVisBuffShadePipeline();
-	CreateTessWritePipeline();
-	CreateTessShadePipeline();
-	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visibility, allocator);
-	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &debugAttachment, allocator);
-	CreateDepthResources();
+	CreateWritePipelines();
+	CreateShadePipelines();
 	CreateFrameBuffers();
 	RecordCommandBuffers();
 }
@@ -316,7 +308,7 @@ void VulkanApplication::CreatePipelineCache()
 // Fixed-function state: all of the structures that define the fixed-function stages of the pipeline
 // Pipeline Layout: the uniform and push values referenced by the shader that can be updated at draw time
 // Render pass: the attachments referenced by the pipeline stages and their usage
-void VulkanApplication::CreateVisBuffShadePipeline()
+void VulkanApplication::CreateShadePipelines()
 {
 	// Create vis buff shade shader stages from compiled shader code
 	auto vertShaderCode = ReadFile("shaders/visbuffshade.vert.spv");
@@ -339,7 +331,7 @@ void VulkanApplication::CreateVisBuffShadePipeline()
 	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	fragShaderStageInfo.module = fragShaderModule;
 	fragShaderStageInfo.pName = "main";
-	VkPipelineShaderStageCreateInfo visBuffShadeShaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };	
+	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };	
 
 	// Set up topology input format
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
@@ -413,7 +405,7 @@ void VulkanApplication::CreateVisBuffShadePipeline()
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.stageCount = 2;
-	pipelineInfo.pStages = visBuffShadeShaderStages;
+	pipelineInfo.pStages = shaderStages;
 	pipelineInfo.pInputAssemblyState = &inputAssembly;
 	pipelineInfo.pViewportState = &viewportState;
 	pipelineInfo.pRasterizationState = &rasterizer;
@@ -439,9 +431,38 @@ void VulkanApplication::CreateVisBuffShadePipeline()
 	// Clean up shader module objects
 	vkDestroyShaderModule(vulkan->Device(), vertShaderModule, nullptr);
 	vkDestroyShaderModule(vulkan->Device(), fragShaderModule, nullptr);
+
+	// Tessellation shade pipeline
+	// Create shader stages
+	vertShaderCode = ReadFile("shaders/visbufftessshade.vert.spv");
+	fragShaderCode = ReadFile("shaders/visbufftessshade.frag.spv");
+	VkShaderModule tessVertShaderModule;
+	VkShaderModule tessFragShaderModule;
+	tessVertShaderModule = CreateShaderModule(vertShaderCode);
+	tessFragShaderModule = CreateShaderModule(fragShaderCode);
+	vertShaderStageInfo.module = tessVertShaderModule;
+	fragShaderStageInfo.module = tessFragShaderModule;
+	shaderStages[0] = vertShaderStageInfo;
+	shaderStages[1] = fragShaderStageInfo;
+
+	// PipelineLayout
+	CreateTessShadePipelineLayout();
+
+	// We can now reuse most of the data from the vis buff shade pipeline setup
+	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.layout = tessShadePipelineLayout;
+	pipelineInfo.renderPass = tessRenderPass;
+	if (vkCreateGraphicsPipelines(vulkan->Device(), pipelineCache, 1, &pipelineInfo, nullptr, &tessShadePipeline) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create tess shade pipeline");
+	}
+
+	// Clean up shader module objects
+	vkDestroyShaderModule(vulkan->Device(), tessVertShaderModule, nullptr);
+	vkDestroyShaderModule(vulkan->Device(), tessFragShaderModule, nullptr);
 }
 
-void VulkanApplication::CreateVisBuffWritePipeline()
+void VulkanApplication::CreateWritePipelines()
 {
 	// Create visibility buffer write shader stages from compiled shader code
 	auto vertShaderCode = ReadFile("shaders/visbuffwrite.vert.spv");
@@ -511,33 +532,19 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	depthStencil.depthWriteEnable = VK_TRUE;
 	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.minDepthBounds = 0.0f; // Optional
-	depthStencil.maxDepthBounds = 1.0f; // Optional
 	depthStencil.stencilTestEnable = VK_FALSE;
-	depthStencil.front = {}; // Optional
-	depthStencil.back = {}; // Optional
 
 	// Set up multisampling (disabled)
 	VkPipelineMultisampleStateCreateInfo multisampling = {};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-	multisampling.minSampleShading = 1.0f; // Optional
-	multisampling.pSampleMask = nullptr; // Optional
-	multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-	multisampling.alphaToOneEnable = VK_FALSE; // Optional
 
 	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass (just vis buff atm)
-	VkPipelineColorBlendAttachmentState colourBlendAttachment = {};
-	colourBlendAttachment.colorWriteMask = 0xf;
-	colourBlendAttachment.blendEnable = VK_FALSE;
-	VkPipelineColorBlendAttachmentState visBlendAttachment = {};
-	visBlendAttachment.colorWriteMask = 0xf;
-	visBlendAttachment.blendEnable = VK_FALSE;
-	VkPipelineColorBlendAttachmentState debugBlendAttachment = {};
-	debugBlendAttachment.colorWriteMask = 0xf;
-	debugBlendAttachment.blendEnable = VK_FALSE;
-	std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachments = { colourBlendAttachment, visBlendAttachment, debugBlendAttachment };
+	VkPipelineColorBlendAttachmentState emptyBlendAttachment = {};
+	emptyBlendAttachment.colorWriteMask = 0xf;
+	emptyBlendAttachment.blendEnable = VK_FALSE;
+	std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachments = { emptyBlendAttachment, emptyBlendAttachment, emptyBlendAttachment };
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
@@ -583,157 +590,25 @@ void VulkanApplication::CreateVisBuffWritePipeline()
 	// Clean up shader module objects
 	vkDestroyShaderModule(vulkan->Device(), vertShaderModule, nullptr);
 	vkDestroyShaderModule(vulkan->Device(), fragShaderModule, nullptr);
-}
 
-void VulkanApplication::CreateTessShadePipeline()
-{
-	// Create vis buff shade shader stages from compiled shader code
-	auto vertShaderCode = ReadFile("shaders/visbufftessshade.vert.spv");
-	auto fragShaderCode = ReadFile("shaders/visbufftessshade.frag.spv");
-
-	// Create shader modules
-	VkShaderModule vertShaderModule;
-	VkShaderModule fragShaderModule;
-	vertShaderModule = CreateShaderModule(vertShaderCode);
-	fragShaderModule = CreateShaderModule(fragShaderCode);
-
-	// Create shader stages
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo = {}; // Vertex
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vertShaderStageInfo.module = vertShaderModule;
-	vertShaderStageInfo.pName = "main";
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo = {}; // Fragment
-	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	fragShaderStageInfo.module = fragShaderModule;
-	fragShaderStageInfo.pName = "main";
-	VkPipelineShaderStageCreateInfo tessShadeShaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-
-	// Set up topology input format
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
-	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-	inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-	// Now create the viewport state with viewport and scissor
-	VkPipelineViewportStateCreateInfo viewportState = {};
-	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewportState.viewportCount = 1;
-	viewportState.pViewports = nullptr;
-	viewportState.scissorCount = 1;
-	viewportState.pScissors = nullptr;
-
-	// Set up the rasterizer, wireframe can be set here
-	VkPipelineRasterizationStateCreateInfo rasterizer = {};
-	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterizer.depthClampEnable = VK_FALSE; // Fragments beyond near and far planes are clamped instead of discarded. Useful for shadow mapping but requires GPU feature
-	rasterizer.rasterizerDiscardEnable = VK_FALSE; // Geometry never passes through rasterizer if this is true.
-	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back faces
-	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
-	rasterizer.depthBiasEnable = VK_FALSE;
-	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-	rasterizer.depthBiasClamp = 0.0f; // Optional
-	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-
-	// Set up depth test
-	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencil.depthTestEnable = VK_TRUE;
-	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_ALWAYS;
-	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.stencilTestEnable = VK_FALSE;
-
-	// Set up multisampling (disabled)
-	VkPipelineMultisampleStateCreateInfo multisampling = {};
-	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-	// Set up color blending (disbaled, all fragment colors will go to the framebuffer unmodified)
-	VkPipelineColorBlendAttachmentState colourBlendAttachment = {};
-	colourBlendAttachment.colorWriteMask = 0xf;
-	colourBlendAttachment.blendEnable = VK_FALSE;
-	VkPipelineColorBlendAttachmentState debugBlendAttachment = {};
-	debugBlendAttachment.colorWriteMask = 0xf;
-	debugBlendAttachment.blendEnable = VK_FALSE;
-	std::array<VkPipelineColorBlendAttachmentState, 2> blendAttachments = { colourBlendAttachment, debugBlendAttachment };
-	VkPipelineColorBlendStateCreateInfo colourBlending = {};
-	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colourBlending.logicOpEnable = VK_FALSE;
-	colourBlending.attachmentCount = 2;
-	colourBlending.pAttachments = blendAttachments.data();
-
-	// Dynamic State
-	std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-	VkPipelineDynamicStateCreateInfo dynamicState = {};
-	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamicState.pDynamicStates = dynamicStateEnables.data();
-	dynamicState.dynamicStateCount = SCAST_U32(dynamicStateEnables.size());
-	dynamicState.flags = 0;
-
-	// PipelineLayout
-	CreateTessShadePipelineLayout();
-
-	// We now have everything we need to create the vis buff shade graphics pipeline
-	VkGraphicsPipelineCreateInfo pipelineInfo = {};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.stageCount = 2;
-	pipelineInfo.pStages = tessShadeShaderStages;
-	pipelineInfo.pInputAssemblyState = &inputAssembly;
-	pipelineInfo.pViewportState = &viewportState;
-	pipelineInfo.pRasterizationState = &rasterizer;
-	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pDepthStencilState = &depthStencil;
-	pipelineInfo.pColorBlendState = &colourBlending;
-	pipelineInfo.pDynamicState = &dynamicState;
-	pipelineInfo.layout = tessShadePipelineLayout;
-	pipelineInfo.renderPass = tessRenderPass;
-	pipelineInfo.subpass = 1; // Index of the sub pass where this pipeline will be used
-	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-	pipelineInfo.basePipelineIndex = -1;
-	pipelineInfo.pNext = nullptr;
-	pipelineInfo.flags = 0;
-	// Empty vertex input state, fullscreen triangle is generated by the vertex shader
-	VkPipelineVertexInputStateCreateInfo emptyInputState = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
-	pipelineInfo.pVertexInputState = &emptyInputState;
-	if (vkCreateGraphicsPipelines(vulkan->Device(), pipelineCache, 1, &pipelineInfo, nullptr, &tessShadePipeline) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create vis buff shade pipeline");
-	}
-
-	// Clean up shader module objects
-	vkDestroyShaderModule(vulkan->Device(), vertShaderModule, nullptr);
-	vkDestroyShaderModule(vulkan->Device(), fragShaderModule, nullptr);
-}
-
-void VulkanApplication::CreateTessWritePipeline()
-{
-	// Create visibility buffer tessellation write shader stages from compiled shader code
-	auto vertShaderCode = ReadFile("shaders/visbufftesswrite.vert.spv");
+	// Create visibility buffer tessellation write shader stages
+	vertShaderCode = ReadFile("shaders/visbufftesswrite.vert.spv");
 	auto hullShaderCode = ReadFile("shaders/visbufftesswrite.tesc.spv");
 	auto domainShaderCode = ReadFile("shaders/visbufftesswrite.tese.spv");
-	auto fragShaderCode = ReadFile("shaders/visbufftesswrite.frag.spv");
+	fragShaderCode = ReadFile("shaders/visbufftesswrite.frag.spv");
 
 	// Create shader modules
-	VkShaderModule vertShaderModule;
+	VkShaderModule tessVertShaderModule;
 	VkShaderModule hullShaderModule;
 	VkShaderModule domainShaderModule;
-	VkShaderModule fragShaderModule;
-	vertShaderModule = CreateShaderModule(vertShaderCode);
+	VkShaderModule tessFragShaderModule;
+	tessVertShaderModule = CreateShaderModule(vertShaderCode);
 	hullShaderModule = CreateShaderModule(hullShaderCode);
 	domainShaderModule = CreateShaderModule(domainShaderCode);
-	fragShaderModule = CreateShaderModule(fragShaderCode);
+	tessFragShaderModule = CreateShaderModule(fragShaderCode);
 
 	// Create shader stages
-	VkPipelineShaderStageCreateInfo vertShaderStageInfo = {}; // Vertex
-	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	vertShaderStageInfo.module = vertShaderModule;
-	vertShaderStageInfo.pName = "main";
+	vertShaderStageInfo.module = tessVertShaderModule; // Vert
 	VkPipelineShaderStageCreateInfo hullShaderStageInfo = {}; // Hull
 	hullShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	hullShaderStageInfo.stage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
@@ -744,141 +619,41 @@ void VulkanApplication::CreateTessWritePipeline()
 	domainShaderStageInfo.stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 	domainShaderStageInfo.module = domainShaderModule;
 	domainShaderStageInfo.pName = "main";
-	VkPipelineShaderStageCreateInfo fragShaderStageInfo = {}; // Fragment
-	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	fragShaderStageInfo.module = fragShaderModule;
-	fragShaderStageInfo.pName = "main";
+	fragShaderStageInfo.module = tessFragShaderModule; // Frag
 	VkPipelineShaderStageCreateInfo visBuffTessWriteShaderStages[] = { vertShaderStageInfo, hullShaderStageInfo, domainShaderStageInfo, fragShaderStageInfo };
 
-	// Set up vertex input format for geometry pass
-	auto bindingDescription = Vertex::GetBindingDescription();
-	auto attributeDescriptions = Vertex::GetAttributeDescriptions();
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.vertexAttributeDescriptionCount = SCAST_U32(attributeDescriptions.size());
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
 	// Set up topology input format
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
-	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-	inputAssembly.primitiveRestartEnable = VK_FALSE;
 
 	// Set up tessellation state
 	VkPipelineTessellationStateCreateInfo tessStateInfo = {};
 	tessStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
 	tessStateInfo.patchControlPoints = 3;
 
-	// Now create the viewport state with viewport and scissor
-	VkPipelineViewportStateCreateInfo viewportState = {};
-	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewportState.viewportCount = 1;
-	viewportState.pViewports = nullptr;
-	viewportState.scissorCount = 1;
-	viewportState.pScissors = nullptr;
-
-	// Set up the rasterizer, wireframe can be set here
-	VkPipelineRasterizationStateCreateInfo rasterizer = {};
-	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	rasterizer.depthClampEnable = VK_FALSE; // Fragments beyond near and far planes are clamped instead of discarded. Useful for shadow mapping but requires GPU feature
-	rasterizer.rasterizerDiscardEnable = VK_FALSE; // Geometry never passes through rasterizer if this is true.
-	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back faces
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
-	rasterizer.depthBiasEnable = VK_FALSE;
-	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-	rasterizer.depthBiasClamp = 0.0f; // Optional
-	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-
-	// Set up depth test
-	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencil.depthTestEnable = VK_TRUE;
-	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-	depthStencil.depthBoundsTestEnable = VK_FALSE;
-	depthStencil.minDepthBounds = 0.0f; // Optional
-	depthStencil.maxDepthBounds = 1.0f; // Optional
-	depthStencil.stencilTestEnable = VK_FALSE;
-	depthStencil.front = {}; // Optional
-	depthStencil.back = {}; // Optional
-
-	// Set up multisampling (disabled)
-	VkPipelineMultisampleStateCreateInfo multisampling = {};
-	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-	multisampling.minSampleShading = 1.0f; // Optional
-	multisampling.pSampleMask = nullptr; // Optional
-	multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-	multisampling.alphaToOneEnable = VK_FALSE; // Optional
-
-	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass (just vis buff atm)
-	VkPipelineColorBlendAttachmentState colourBlendAttachment = {};
-	colourBlendAttachment.colorWriteMask = 0xf;
-	colourBlendAttachment.blendEnable = VK_FALSE;
-	VkPipelineColorBlendAttachmentState visBuffBlendAttachment = {};
-	visBuffBlendAttachment.colorWriteMask = 0xf;
-	visBuffBlendAttachment.blendEnable = VK_FALSE;
-	VkPipelineColorBlendAttachmentState debugBlendAttachment = {};
-	debugBlendAttachment.colorWriteMask = 0xf;
-	debugBlendAttachment.blendEnable = VK_FALSE;
-	VkPipelineColorBlendAttachmentState tessCoordsBlendAttachment = {};
-	tessCoordsBlendAttachment.colorWriteMask = 0xf;
-	tessCoordsBlendAttachment.blendEnable = VK_FALSE;
-	std::array<VkPipelineColorBlendAttachmentState, 4> blendAttachments = { colourBlendAttachment, visBuffBlendAttachment, debugBlendAttachment, tessCoordsBlendAttachment };
-	VkPipelineColorBlendStateCreateInfo colourBlending = {};
-	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colourBlending.logicOpEnable = VK_FALSE;
-	colourBlending.attachmentCount = SCAST_U32(blendAttachments.size());
-	colourBlending.pAttachments = blendAttachments.data();
-
-	// Dynamic State
-	std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-	VkPipelineDynamicStateCreateInfo dynamicState = {};
-	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamicState.pDynamicStates = dynamicStateEnables.data();
-	dynamicState.dynamicStateCount = SCAST_U32(dynamicStateEnables.size());
-	dynamicState.flags = 0;
+	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass
+	std::array<VkPipelineColorBlendAttachmentState, 4> tessBlendAttachments = { emptyBlendAttachment, emptyBlendAttachment, emptyBlendAttachment, emptyBlendAttachment };
+	colourBlending.attachmentCount = SCAST_U32(tessBlendAttachments.size());
+	colourBlending.pAttachments = tessBlendAttachments.data();
 
 	// PipelineLayout
 	CreateTessWritePipelineLayout();
 
-	// We now have everything we need to create the vis buff write graphics pipeline
-	VkGraphicsPipelineCreateInfo pipelineInfo = {};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	// We now have everything we need to create the tess write graphics pipeline
 	pipelineInfo.layout = tessWritePipelineLayout;
 	pipelineInfo.renderPass = tessRenderPass;
-	pipelineInfo.subpass = 0; // Index of the sub pass where this pipeline will be used
 	pipelineInfo.pStages = visBuffTessWriteShaderStages;
 	pipelineInfo.stageCount = 4;
 	pipelineInfo.pTessellationState = &tessStateInfo;
-	pipelineInfo.pInputAssemblyState = &inputAssembly;
-	pipelineInfo.pViewportState = &viewportState;
-	pipelineInfo.pRasterizationState = &rasterizer;
-	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pDepthStencilState = &depthStencil;
-	pipelineInfo.pColorBlendState = &colourBlending;
-	pipelineInfo.pDynamicState = &dynamicState;
-	pipelineInfo.pVertexInputState = &vertexInputInfo;
-	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-	pipelineInfo.basePipelineIndex = -1;
-
-	// Now create the vis buff write pass pipeline
 	if (vkCreateGraphicsPipelines(vulkan->Device(), pipelineCache, 1, &pipelineInfo, nullptr, &tessWritePipeline) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create vis buff write pipeline");
+		throw std::runtime_error("Failed to create tess write pipeline");
 	}
 
 	// Clean up shader module objects
-	vkDestroyShaderModule(vulkan->Device(), vertShaderModule, nullptr);
+	vkDestroyShaderModule(vulkan->Device(), tessVertShaderModule, nullptr);
 	vkDestroyShaderModule(vulkan->Device(), hullShaderModule, nullptr);
 	vkDestroyShaderModule(vulkan->Device(), domainShaderModule, nullptr);
-	vkDestroyShaderModule(vulkan->Device(), fragShaderModule, nullptr);
+	vkDestroyShaderModule(vulkan->Device(), tessFragShaderModule, nullptr);
 }
 
 void VulkanApplication::CreateVisBuffShadePipelineLayout()
@@ -1687,7 +1462,7 @@ void VulkanApplication::CreateShadePassDescriptorSetLayouts()
 	}
 }
 
-void VulkanApplication::CreateWritePassDescriptorSetLayout()
+void VulkanApplication::CreateVisBuffWritePassDescriptorSetLayout()
 {
 	// Descriptor layout for the write pass
 	// Binding 0: Vertex Shader Uniform Buffer of loaded model
