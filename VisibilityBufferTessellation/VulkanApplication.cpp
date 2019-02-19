@@ -434,8 +434,8 @@ void VulkanApplication::CreateShadePipelines()
 
 	// Tessellation shade pipeline
 	// Create shader stages
-	vertShaderCode = ReadFile("shaders/visbufftessshade.vert.spv");
-	fragShaderCode = ReadFile("shaders/visbufftessshade.frag.spv");
+	vertShaderCode = ReadFile("shaders/tessshade.vert.spv");
+	fragShaderCode = ReadFile("shaders/tessshade.frag.spv");
 	VkShaderModule tessVertShaderModule;
 	VkShaderModule tessFragShaderModule;
 	tessVertShaderModule = CreateShaderModule(vertShaderCode);
@@ -592,10 +592,10 @@ void VulkanApplication::CreateWritePipelines()
 	vkDestroyShaderModule(vulkan->Device(), fragShaderModule, nullptr);
 
 	// Create visibility buffer tessellation write shader stages
-	vertShaderCode = ReadFile("shaders/visbufftesswrite.vert.spv");
-	auto hullShaderCode = ReadFile("shaders/visbufftesswrite.tesc.spv");
-	auto domainShaderCode = ReadFile("shaders/visbufftesswrite.tese.spv");
-	fragShaderCode = ReadFile("shaders/visbufftesswrite.frag.spv");
+	vertShaderCode = ReadFile("shaders/tesswrite.vert.spv");
+	auto hullShaderCode = ReadFile("shaders/tesswrite.tesc.spv");
+	auto domainShaderCode = ReadFile("shaders/tesswrite.tese.spv");
+	fragShaderCode = ReadFile("shaders/tesswrite.frag.spv");
 
 	// Create shader modules
 	VkShaderModule tessVertShaderModule;
@@ -620,7 +620,7 @@ void VulkanApplication::CreateWritePipelines()
 	domainShaderStageInfo.module = domainShaderModule;
 	domainShaderStageInfo.pName = "main";
 	fragShaderStageInfo.module = tessFragShaderModule; // Frag
-	VkPipelineShaderStageCreateInfo visBuffTessWriteShaderStages[] = { vertShaderStageInfo, hullShaderStageInfo, domainShaderStageInfo, fragShaderStageInfo };
+	VkPipelineShaderStageCreateInfo tessWriteShaderStages[] = { vertShaderStageInfo, hullShaderStageInfo, domainShaderStageInfo, fragShaderStageInfo };
 
 	// Set up topology input format
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
@@ -641,7 +641,7 @@ void VulkanApplication::CreateWritePipelines()
 	// We now have everything we need to create the tess write graphics pipeline
 	pipelineInfo.layout = tessWritePipelineLayout;
 	pipelineInfo.renderPass = tessRenderPass;
-	pipelineInfo.pStages = visBuffTessWriteShaderStages;
+	pipelineInfo.pStages = tessWriteShaderStages;
 	pipelineInfo.stageCount = 4;
 	pipelineInfo.pTessellationState = &tessStateInfo;
 	if (vkCreateGraphicsPipelines(vulkan->Device(), pipelineCache, 1, &pipelineInfo, nullptr, &tessWritePipeline) != VK_SUCCESS)
