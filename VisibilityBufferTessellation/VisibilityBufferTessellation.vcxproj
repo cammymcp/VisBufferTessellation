@@ -106,13 +106,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Repositories\Visual Studio Projects\Libraries\imgui-master\examples;D:\Repositories\Visual Studio Projects\Libraries\imgui-master;D:\Repositories\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Repositories\Visual Studio Projects\Libraries\glm;D:\Repositories\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Repositories\Visual Studio Projects\Libraries\stb-master;D:\VulkanSDK\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
-      <AdditionalLibraryDirectories>D:\Vulkan\1.1.85.0\Lib;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>D:\VulkanSDK\1.1.85.0\Lib;D:\Repositories\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -146,7 +146,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Documents\Visual Studio Projects\Libraries\imgui-master\examples;D:\Documents\Visual Studio Projects\Libraries\imgui-master;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Documents\Visual Studio Projects\Libraries\glm;D:\Documents\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Documents\Visual Studio Projects\Libraries\stb-master;D:\Vulkan\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Repositories\Visual Studio Projects\Libraries\imgui-master\examples;D:\Repositories\Visual Studio Projects\Libraries\imgui-master;D:\Repositories\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\include;D:\Repositories\Visual Studio Projects\Libraries\glm;D:\Repositories\Visual Studio Projects\Libraries\tinyobjloader-master;D:\Repositories\Visual Studio Projects\Libraries\stb-master;D:\VulkanSDK\1.1.85.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -154,7 +154,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
-      <AdditionalLibraryDirectories>D:\Vulkan\1.1.85.0\Lib;D:\Documents\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>D:\VulkanSDK\1.1.85.0\Lib;D:\Repositories\Visual Studio Projects\Libraries\glfw-3.2.1.bin.WIN64\lib-vc2015;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
