@@ -160,22 +160,28 @@
     <None Include="shaders\visbuffwrite.vert">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\visbufftessshade.frag">
+    <None Include="shaders\tessshade.frag">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\visbufftessshade.vert">
+    <None Include="shaders\tessshade.vert">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\visbufftesswrite.frag">
+    <None Include="shaders\tesswrite.frag">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\visbufftesswrite.vert">
+    <None Include="shaders\tesswrite.tesc">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\visbufftesswrite.tese">
+    <None Include="shaders\tesswrite.tese">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="shaders\visbufftesswrite.tesc">
+    <None Include="shaders\tesswrite.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\ui.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\ui.vert">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

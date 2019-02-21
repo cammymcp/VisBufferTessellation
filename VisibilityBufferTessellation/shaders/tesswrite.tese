@@ -12,14 +12,14 @@ layout(binding = 1) uniform UniformBufferObject
 
 layout(binding = 2) uniform sampler2D heightmap;
 
-layout(triangles, fractional_odd_spacing, cw) in;
+layout(triangles, equal_spacing, cw) in;
 
 layout (location = 0) in vec3 inNormal[];
 layout (location = 1) in vec2 inTexCoords[];
  
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec2 outTexCoords;
-layout (location = 2) out vec3 tessCoords;
+layout (location = 2) flat out vec3 tessCoords;
 
 vec2 interpolate2D(vec2 v0, vec2 v1, vec2 v2)
 {

@@ -37,7 +37,7 @@ void VulkanApplication::Init()
 	CreatePipelineCache();
 	CreateWritePipelines();
 	CreateShadePipelines();
-	terrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool);
+	InitialiseTerrains();
 	CreateUniformBuffers();
 	CreateDescriptorPool();
 	CreateFrameBuffers();
@@ -89,7 +89,8 @@ void VulkanApplication::CleanUp()
 	tessFactorBuffer.CleanUp(allocator);
 
 	// Destroy vertex and index buffers
-	terrain.CleanUp(allocator, vulkan->Device());
+	visBuffTerrain.CleanUp(allocator, vulkan->Device());
+	tessTerrain.CleanUp(allocator, vulkan->Device());
 
 	// Destroy ImGui resources
 	imGui.CleanUp();
@@ -144,6 +145,18 @@ void VulkanApplication::ApplySettings(AppSettings settings)
 		imGui.CleanUp();
 		InitImGui(currentPipeline == VISIBILITYBUFFER ? visBuffRenderPass : tessRenderPass);
 	}
+}
+#pragma endregion
+
+#pragma region Geometry Functions
+void VulkanApplication::InitialiseTerrains()
+{
+	Terrain::InitInfo visBuffTerrainInfo(64, 32, 5.0f);
+	Terrain::InitInfo tessTerrainInfo(4, 32, 5.0f);
+
+	// Generate terrain geometry
+	visBuffTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, visBuffTerrainInfo);
+	tessTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, tessTerrainInfo);
 }
 #pragma endregion
 
@@ -1216,10 +1229,10 @@ void VulkanApplication::RecordCommandBuffers()
 				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffWritePipelineLayout, 0, 1, &visBuffWritePassDescSet, 0, nullptr);
 				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, visBuffWritePipeline);
 				VkDeviceSize offsets[1] = { 0 };
-				VkBuffer vertexBuffers[] = { terrain.VertexBuffer().VkHandle() };
+				VkBuffer vertexBuffers[] = { visBuffTerrain.VertexBuffer().VkHandle() };
 				vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
-				vkCmdBindIndexBuffer(commandBuffers[i], terrain.IndexBuffer().VkHandle(), 0, VK_INDEX_TYPE_UINT32);
-				vkCmdDrawIndexed(commandBuffers[i], SCAST_U32(terrain.Indices().size()), 1, 0, 0, 0);
+				vkCmdBindIndexBuffer(commandBuffers[i], visBuffTerrain.IndexBuffer().VkHandle(), 0, VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(commandBuffers[i], SCAST_U32(visBuffTerrain.Indices().size()), 1, 0, 0, 0);
 				break;
 			}
 			case VB_TESSELLATION:
@@ -1227,10 +1240,10 @@ void VulkanApplication::RecordCommandBuffers()
 				vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, tessWritePipelineLayout, 0, 1, &tessWritePassDescSet, 0, nullptr);
 				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, tessWritePipeline);
 				VkDeviceSize offsets[1] = { 0 };
-				VkBuffer vertexBuffers[] = { terrain.VertexBuffer().VkHandle() };
+				VkBuffer vertexBuffers[] = { tessTerrain.VertexBuffer().VkHandle() };
 				vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
-				vkCmdBindIndexBuffer(commandBuffers[i], terrain.IndexBuffer().VkHandle(), 0, VK_INDEX_TYPE_UINT32);
-				vkCmdDrawIndexed(commandBuffers[i], SCAST_U32(terrain.Indices().size()), 1, 0, 0, 0);
+				vkCmdBindIndexBuffer(commandBuffers[i], tessTerrain.IndexBuffer().VkHandle(), 0, VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(commandBuffers[i], SCAST_U32(tessTerrain.Indices().size()), 1, 0, 0, 0);
 				break;
 			}
 		}
@@ -1356,7 +1369,7 @@ void VulkanApplication::UpdateUniformBuffers()
 
 	// Map tessellation factor to ubo
 	TessFactorUBO tessUbo = {};
-	tessUbo.tessellationFactor = 2.0f;
+	tessUbo.tessellationFactor = 4.0f;
 	tessFactorBuffer.MapData(&tessUbo, allocator);
 }
 
@@ -1560,7 +1573,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 	for (size_t i = 0; i < vulkan->Swapchain().Images().size(); i++)
 	{
 		// Terrain texture sampler
-		terrain.SetupTextureDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffShadePassDescSets[i], 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+		visBuffTerrain.SetupTextureDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffShadePassDescSets[i], 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
 		// Visibility Buffer attachment
 		visibilityBuffer.visibility.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_NULL_HANDLE);
@@ -1571,23 +1584,23 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		mvpUniformBuffer.SetupDescriptorWriteSet(visBuffShadePassDescSets[i], 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
 		// Terrain buffers
-		terrain.SetupIndexBufferDescriptor(visBuffShadePassDescSets[i], 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
-		terrain.SetupAttributeBufferDescriptor(visBuffShadePassDescSets[i], 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
+		visBuffTerrain.SetupIndexBufferDescriptor(visBuffShadePassDescSets[i], 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
+		visBuffTerrain.SetupAttributeBufferDescriptor(visBuffShadePassDescSets[i], 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
 
 		// Create a descriptor writes for each descriptor in the set
 		std::array<VkWriteDescriptorSet, 5> visBuffShadePassDescriptorWrites = {};
-		visBuffShadePassDescriptorWrites[0] = terrain.GetTexture().WriteDescriptorSet();
+		visBuffShadePassDescriptorWrites[0] = visBuffTerrain.GetTexture().WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[1] = visibilityBuffer.visibility.WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
-		visBuffShadePassDescriptorWrites[3] = terrain.IndexBuffer().WriteDescriptorSet();
-		visBuffShadePassDescriptorWrites[4] = terrain.AttributeBuffer().WriteDescriptorSet();
+		visBuffShadePassDescriptorWrites[3] = visBuffTerrain.IndexBuffer().WriteDescriptorSet();
+		visBuffShadePassDescriptorWrites[4] = visBuffTerrain.AttributeBuffer().WriteDescriptorSet();
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(visBuffShadePassDescriptorWrites.size()), visBuffShadePassDescriptorWrites.data(), 0, nullptr);
 
 		// Now for the tessellation pipeline
-		terrain.SetupTextureDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessShadePassDescSets[i], 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+		tessTerrain.SetupTextureDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessShadePassDescSets[i], 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 		mvpUniformBuffer.SetupDescriptorWriteSet(tessShadePassDescSets[i], 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
-		terrain.SetupIndexBufferDescriptor(tessShadePassDescSets[i], 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
-		terrain.SetupAttributeBufferDescriptor(tessShadePassDescSets[i], 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
+		tessTerrain.SetupIndexBufferDescriptor(tessShadePassDescSets[i], 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
+		tessTerrain.SetupAttributeBufferDescriptor(tessShadePassDescSets[i], 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
 		// Tess Visibility Buffer attachment
 		tessVisibilityBuffer.visibility.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_NULL_HANDLE);
 		tessVisibilityBuffer.visibility.SetupDescriptorWriteSet(tessShadePassDescSets[i], 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
@@ -1595,11 +1608,11 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		tessVisibilityBuffer.tessCoords.SetupDescriptorWriteSet(tessShadePassDescSets[i], 5, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
 
 		std::array<VkWriteDescriptorSet, 6> tessShadePassDescriptorWrites = {};
-		tessShadePassDescriptorWrites[0] = terrain.GetTexture().WriteDescriptorSet();
+		tessShadePassDescriptorWrites[0] = tessTerrain.GetTexture().WriteDescriptorSet();
 		tessShadePassDescriptorWrites[1] = tessVisibilityBuffer.visibility.WriteDescriptorSet();
 		tessShadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
-		tessShadePassDescriptorWrites[3] = terrain.IndexBuffer().WriteDescriptorSet();
-		tessShadePassDescriptorWrites[4] = terrain.AttributeBuffer().WriteDescriptorSet();
+		tessShadePassDescriptorWrites[3] = tessTerrain.IndexBuffer().WriteDescriptorSet();
+		tessShadePassDescriptorWrites[4] = tessTerrain.AttributeBuffer().WriteDescriptorSet();
 		tessShadePassDescriptorWrites[5] = tessVisibilityBuffer.tessCoords.WriteDescriptorSet();
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(tessShadePassDescriptorWrites.size()), tessShadePassDescriptorWrites.data(), 0, nullptr);
 	}
@@ -1627,8 +1640,8 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 	mvpUniformBuffer.SetupDescriptor(sizeof(MVPUniformBufferObject), 0);
 	mvpUniformBuffer.SetupDescriptorWriteSet(visBuffWritePassDescSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
-	// Heightmap texture
-	terrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffWritePassDescSet, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+	// Heightmap texture (Both terrains will be using the same heightmap, so it's okay to just initialise the visBuffTerrain's one. Saves having to descriptor sets for the write pass)
+	visBuffTerrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffWritePassDescSet, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
 	// Create a descriptor write for each descriptor in the set
 	std::array<VkWriteDescriptorSet, 2> writePassDescriptorWrites = {};
@@ -1637,7 +1650,7 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 	writePassDescriptorWrites[0] = mvpUniformBuffer.WriteDescriptorSet();
 
 	// Binding 1: Heightmap texture for vertex buffer
-	writePassDescriptorWrites[1] = terrain.Heightmap().WriteDescriptorSet();
+	writePassDescriptorWrites[1] = visBuffTerrain.Heightmap().WriteDescriptorSet();
 
 	vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(writePassDescriptorWrites.size()), writePassDescriptorWrites.data(), 0, nullptr);
 }
@@ -1669,7 +1682,7 @@ void VulkanApplication::CreateTessWritePassDescriptorSet()
 	mvpUniformBuffer.SetupDescriptorWriteSet(tessWritePassDescSet, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
 	// Heightmap texture
-	terrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessWritePassDescSet, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+	visBuffTerrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessWritePassDescSet, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
 	// Create a descriptor write for each descriptor in the set
 	std::array<VkWriteDescriptorSet, 3> tessWritePassDescriptorWrites = {};
@@ -1681,7 +1694,7 @@ void VulkanApplication::CreateTessWritePassDescriptorSet()
 	tessWritePassDescriptorWrites[1] = mvpUniformBuffer.WriteDescriptorSet();
 
 	// Binding 2: Heightmap texture for vertex buffer
-	tessWritePassDescriptorWrites[2] = terrain.Heightmap().WriteDescriptorSet();
+	tessWritePassDescriptorWrites[2] = visBuffTerrain.Heightmap().WriteDescriptorSet();
 
 	vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(tessWritePassDescriptorWrites.size()), tessWritePassDescriptorWrites.data(), 0, nullptr);
 }

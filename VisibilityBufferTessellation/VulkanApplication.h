@@ -77,6 +77,10 @@ namespace vbt
 		void InitImGui(VkRenderPass renderPass);
 #pragma endregion
 
+#pragma region Geometry Functions
+		void InitialiseTerrains();
+#pragma endregion
+
 #pragma region Input Functions
 		static void ProcessKeyInput(GLFWwindow* window, int key, int scancode, int action, int mods);
 		static void ProcessMouseInput(GLFWwindow* window, int button, int action, int mods);
@@ -181,7 +185,8 @@ namespace vbt
 #pragma endregion
 
 #pragma region Geometry
-		Terrain terrain;
+		Terrain visBuffTerrain;
+		Terrain tessTerrain;
 		Buffer mvpUniformBuffer;
 		Buffer tessFactorBuffer;
 #pragma endregion

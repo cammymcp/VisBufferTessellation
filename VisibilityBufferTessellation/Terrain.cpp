@@ -3,12 +3,12 @@
 
 namespace vbt
 {
-	void Terrain::Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool)
+	void Terrain::Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool, InitInfo info)
 	{
 		texture.LoadAndCreate(TEXTURE_PATH, allocator, device, physDevice, cmdPool);
 		heightmap.LoadAndCreate(HEIGHTMAP_PATH, allocator, device, physDevice, cmdPool);
 
-		Generate();
+		Generate(info.verticesPerEdge, info.width, info.uvScale);
 
 		CreateBuffers(allocator, device, physDevice, cmdPool);
 	}
@@ -32,19 +32,27 @@ namespace vbt
 		heightmap.CleanUp(allocator, device);
 	}
 
-	void Terrain::Generate()
+	void Terrain::Generate(int verticesPerEdge, int width, float uvScale)
 	{
+		// Get triangle count
+		const uint32_t quadsPerSide = verticesPerEdge - 1;
+		int quadCount = quadsPerSide * quadsPerSide;
+		int triangleCount = quadCount * 2;
+
+		// Get offset from width
+		float vertexOffset = (float)width / (float)verticesPerEdge;
+
 		// Generate vertices
-		for (auto x = 0; x < VERTS_PER_EDGE; x++)
+		for (auto x = 0; x < verticesPerEdge; x++)
 		{
-			for (auto z = 0; z < VERTS_PER_EDGE; z++)
+			for (auto z = 0; z < verticesPerEdge; z++)
 			{
 				Vertex vertex;
 				VertexAttributes attributes;
-				vertex.pos.x = x * VERTEX_OFFSET + VERTEX_OFFSET / 2.0f - (float)VERTS_PER_EDGE * VERTEX_OFFSET / 2.0f;
+				vertex.pos.x = x * vertexOffset + vertexOffset / 2.0f - (float)verticesPerEdge * vertexOffset / 2.0f;
 				vertex.pos.y = 0;
-				vertex.pos.z = z * VERTEX_OFFSET + VERTEX_OFFSET / 2.0f - (float)VERTS_PER_EDGE * VERTEX_OFFSET / 2.0f;
-				vertex.uv = glm::vec2((float)x / VERTS_PER_EDGE, (float)z / VERTS_PER_EDGE) * -UV_SCALE;
+				vertex.pos.z = z * vertexOffset + vertexOffset / 2.0f - (float)verticesPerEdge * vertexOffset / 2.0f;
+				vertex.uv = glm::vec2((float)x / verticesPerEdge, (float)z / verticesPerEdge) * -uvScale;
 				vertex.normal = glm::vec3(0.0f, 0.0f, 1.0f);
 				attributes.posXYZnormX = { vertex.pos.x, vertex.pos.y, vertex.pos.z, vertex.normal.x };
 				attributes.normYZtexXY = { vertex.normal.y, vertex.normal.z, vertex.uv.x, vertex.uv.y };
@@ -54,18 +62,17 @@ namespace vbt
 		}
 		
 		// Generate triangle list indices
-		const uint32_t patchWidth = VERTS_PER_EDGE - 1;
-		indices.resize(patchWidth * patchWidth * 6);
-		for (auto x = 0; x < patchWidth; x++)
+		indices.resize(quadCount * 6);
+		for (auto x = 0; x < quadsPerSide; x++)
 		{
-			for (auto y = 0; y < patchWidth; y++)
+			for (auto y = 0; y < quadsPerSide; y++)
 			{
-				uint32_t index = (x + y * patchWidth) * 6;
-				indices[index] = (x + y * VERTS_PER_EDGE); // bottom left
-				indices[index + 1] = indices[index] + VERTS_PER_EDGE; // bottom right
+				uint32_t index = (x + y * quadsPerSide) * 6;
+				indices[index] = (x + y * verticesPerEdge); // bottom left
+				indices[index + 1] = indices[index] + verticesPerEdge; // bottom right
 				indices[index + 2] = indices[index + 1] + 1; // top right
 				indices[index + 3] = indices[index] + 1; // top left
-				indices[index + 4] = (x + y * VERTS_PER_EDGE); // bottom left
+				indices[index + 4] = (x + y * verticesPerEdge); // bottom left
 				indices[index + 5] = indices[index + 1] + 1; // top right
 			}
 		}
