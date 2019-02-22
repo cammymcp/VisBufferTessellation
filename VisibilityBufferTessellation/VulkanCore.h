@@ -34,6 +34,7 @@ namespace vbt
 	public:
 		// Interface Functions
 		void Init(GLFWwindow* window);
+		void RecreateSwapchain(GLFWwindow* window);
 		void CleanUp(); 
 
 		// Getters

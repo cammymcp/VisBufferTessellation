@@ -160,5 +160,29 @@
     <None Include="shaders\visbuffwrite.vert">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="shaders\tessshade.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\tessshade.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\tesswrite.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\tesswrite.tesc">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\tesswrite.tese">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\tesswrite.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\ui.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="shaders\ui.vert">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

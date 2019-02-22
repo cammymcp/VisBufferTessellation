@@ -17,7 +17,6 @@ namespace vbt
 		void InitSwapChain(GLFWwindow* window, VkPhysicalDevice physicalDevice, VkDevice device);
 		void CleanUpSwapChain(VkDevice device);
 		void CleanUpSurface(VkInstance instance);
-		void RecreateSwapChain(GLFWwindow* window, VkPhysicalDevice physicalDevice, VkDevice device);
 		static VkImageView CreateImageView(const VkDevice &device, VkImage &image, VkFormat format, VkImageAspectFlags aspectFlags);
 
 		VkSwapchainKHR VkHandle() const { return swapChain; }

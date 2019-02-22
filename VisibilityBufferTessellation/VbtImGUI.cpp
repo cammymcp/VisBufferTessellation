@@ -21,7 +21,7 @@ namespace vbt
 		ImGui::StyleColorsDark();
 
 		// Setup bindings to vulkan objects
-		ImGui_ImplGlfw_InitForVulkan(window, true);
+		ImGui_ImplGlfw_InitForVulkan(window, false);
 		ImGui_ImplVulkan_InitInfo initInfo = *info;
 		initInfo.DescriptorPool = descriptorPool;
 		ImGui_ImplVulkanVbt_Init(&initInfo, renderPass);
@@ -105,7 +105,30 @@ namespace vbt
 			ImGui::SameLine(); if (ImGui::InputFloat("z##rot", &(currentSettings.cameraRot.z), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
 			ImGui::PopItemWidth();
 		}
+		if (ImGui::CollapsingHeader("Pipelines"))
+		{
+			ImGui::Text("Switch Pipeline");
+			if (ImGui::Button("Visibility Buffer", ImVec2(150, 20)))
+			{
+				if (currentSettings.pipeline == VB_TESSELLATION)
+				{
+					currentSettings.pipeline = VISIBILITYBUFFER;
+					currentSettings.updateSettings = true;
+				}
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("VB + Tessellation", ImVec2(150, 20)))
+			{
+				if (currentSettings.pipeline == VISIBILITYBUFFER)
+				{
+					currentSettings.pipeline = VB_TESSELLATION;
+					currentSettings.updateSettings = true;
+				}
+			}
+			ImGui::Text(currentSettings.pipeline == VISIBILITYBUFFER ? "Current: Visibility Buffer" : "Current: Vis Buff + Tessellation");
+		}
 		ImGui::End();
+		ImGui::Render();
 
 		// Only update the application when a value has been changed
 		if (currentSettings.updateSettings)
@@ -113,8 +136,6 @@ namespace vbt
 			appHandle->ApplySettings(currentSettings);
 			currentSettings.updateSettings = false;
 		}
-
-		ImGui::Render();
 	}
 	
 	void ImGUI::DrawFrame(VkCommandBuffer commandBuffer)

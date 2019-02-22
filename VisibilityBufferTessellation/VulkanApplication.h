@@ -21,25 +21,30 @@
 const int WIDTH = 1280;
 const int HEIGHT = 720;
 const std::string MODEL_PATH = "models/chalet.obj";
-const VkBool32 WIREFRAME = VK_FALSE;
-const VkClearColorValue CLEAR_COLOUR = { 0.7f, 0.3f, 0.25f, 1.0f };
 #pragma endregion
 
 #pragma region Frame Buffers
 struct VisibilityBuffer
 {
-	VkFramebuffer frameBuffer;
-	vbt::Image visibility, depth;
+	vbt::Image visibility;
+};
+
+struct TessellationVisibilityBuffer
+{
+	vbt::Image visibility, tessCoords;
 };
 #pragma endregion
 
 #pragma region Uniform Buffers
-struct UniformBufferObject
+struct MVPUniformBufferObject 
 {
 	glm::mat4 mvp;
 	glm::mat4 proj;
-	//glm::mat4 view;
-	//glm::mat4 invViewProj;
+};
+
+struct TessFactorUBO
+{
+	float tessellationFactor;
 };
 #pragma endregion
 
@@ -69,7 +74,11 @@ namespace vbt
 #pragma endregion
 
 #pragma region ImGui Functions
-		void InitImGui();
+		void InitImGui(VkRenderPass renderPass);
+#pragma endregion
+
+#pragma region Geometry Functions
+		void InitialiseTerrains();
 #pragma endregion
 
 #pragma region Input Functions
@@ -80,16 +89,18 @@ namespace vbt
 
 #pragma region Presentation and Swap Chain Functions
 		void RecreateSwapChain();
-		void CleanUpSwapChain();
+		void CleanUpSwapChainResources();
 #pragma endregion
 
 #pragma region Graphics Pipeline Functions
 		void CreatePipelineCache();
-		void CreateVisBuffShadePipeline();
-		void CreateVisBuffWritePipeline();
+		void CreateShadePipelines();
+		void CreateWritePipelines();
 		void CreateVisBuffShadePipelineLayout();
 		void CreateVisBuffWritePipelineLayout();
-		void CreateVisBuffRenderPass();
+		void CreateTessShadePipelineLayout();
+		void CreateTessWritePipelineLayout();
+		void CreateRenderPasses();
 		VkShaderModule CreateShaderModule(const std::vector<char>& code);
 #pragma endregion
 
@@ -102,8 +113,8 @@ namespace vbt
 
 #pragma region Command Buffer Functions
 		void CreateCommandPool();
-		void AllocateVisBuffCommandBuffers();
-		void RecordVisBuffCommandBuffers();
+		void AllocateCommandBuffers();
+		void RecordCommandBuffers();
 #pragma endregion
 
 #pragma region Depth Buffer Functions
@@ -114,74 +125,78 @@ namespace vbt
 
 #pragma region Buffer Functions
 		void CreateUniformBuffers();
-		void UpdateMVPUniformBuffer();
+		void UpdateUniformBuffers();
 		void CreateVmaAllocator();
 #pragma endregion
 
 #pragma region Descriptor Functions
 		void CreateDescriptorPool();
-		void CreateShadePassDescriptorSetLayout();
-		void CreateWritePassDescriptorSetLayout();
-		void CreateShadePassDescriptorSets(); 
+		void CreateShadePassDescriptorSetLayouts();
+		void CreateShadePassDescriptorSets();
+		void CreateVisBuffWritePassDescriptorSetLayout();
 		void CreateWritePassDescriptorSet();
+		void CreateTessWritePassDescriptorSetLayout();
+		void CreateTessWritePassDescriptorSet();
 #pragma endregion
 
 #pragma region Other Functions
 		static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 #pragma endregion
 
-		// Handles and Containers
-#pragma region Core Objects
+#pragma region Shared Objects
 		GLFWwindow* window;
 		VulkanCore* vulkan;
-		Camera camera;
-#pragma endregion
-
-#pragma region ImGui Objects
 		ImGUI imGui;
+		Camera camera;
+		VkPipelineCache pipelineCache;
+		VkCommandPool commandPool;
+		VkDescriptorPool descriptorPool;
+		VmaAllocator allocator;
+		std::vector<VkCommandBuffer> commandBuffers;
+		vbt::Image depthImage;
 #pragma endregion
 
-#pragma region Graphics Pipeline Objects
+#pragma region Visibility Buffer Pipeline 
+		VisibilityBuffer visibilityBuffer;
+		VkRenderPass visBuffRenderPass;
 		VkPipeline visBuffShadePipeline;
 		VkPipeline visBuffWritePipeline;
-		VkPipelineCache pipelineCache;
 		VkPipelineLayout visBuffShadePipelineLayout;
 		VkPipelineLayout visBuffWritePipelineLayout;
-		VkRenderPass visBuffRenderPass;
+		std::vector<VkFramebuffer> visBuffFramebuffers;
+		VkDescriptorSet visBuffWritePassDescSet;
+		VkDescriptorSetLayout visBuffWritePassDescSetLayout;
+		std::vector<VkDescriptorSet> visBuffShadePassDescSets;
+		VkDescriptorSetLayout visBuffShadePassDescSetLayout;
 #pragma endregion
 
-#pragma region Drawing Objects
-		std::vector<VkFramebuffer> swapChainFramebuffers;
-		VisibilityBuffer visibilityBuffer;
+#pragma region Visibility Buffer + Tessellation Pipeline
+		TessellationVisibilityBuffer tessVisibilityBuffer;
+		VkRenderPass tessRenderPass;
+		VkPipeline tessShadePipeline;
+		VkPipeline tessWritePipeline;
+		VkPipelineLayout tessShadePipelineLayout;
+		VkPipelineLayout tessWritePipelineLayout;
+		std::vector<VkFramebuffer> tessFramebuffers;
+		VkDescriptorSet tessWritePassDescSet;
+		VkDescriptorSetLayout tessWritePassDescSetLayout;
+		std::vector<VkDescriptorSet> tessShadePassDescSets;
+		VkDescriptorSetLayout tessShadePassDescSetLayout;
+#pragma endregion
+
+#pragma region Geometry
+		// Two terrains, one detailed, one coarse for tessellation.
+		Terrain visBuffTerrain;
+		Terrain tessTerrain;
+		Buffer mvpUniformBuffer;
+		Buffer tessFactorBuffer;
+#pragma endregion
+
+#pragma region Input, Settings, Counters and Flags
+		PipelineType currentPipeline = VISIBILITYBUFFER;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;
 		float frameTime = 0.0f;
-#pragma endregion
-
-#pragma region Command Buffer Objects
-		std::vector<VkCommandBuffer> visBuffCommandBuffers;
-		VkCommandPool commandPool;
-#pragma endregion
-
-#pragma region Buffer Objects
-		VmaAllocator allocator;
-		Buffer mvpUniformBuffer;
-#pragma endregion
-
-#pragma region Model Objects
-		//Mesh chalet;
-		Terrain terrain;
-#pragma endregion
-
-#pragma region Descriptor Objects
-		VkDescriptorPool descriptorPool;
-		std::vector<VkDescriptorSet> shadePassDescriptorSets;
-		VkDescriptorSetLayout shadePassDescriptorSetLayout;
-		VkDescriptorSet writePassDescriptorSet;
-		VkDescriptorSetLayout writePassDescriptorSetLayout;
-#pragma endregion
-
-#pragma region Input Objects
 		glm::vec2 mousePosition = glm::vec3();
 		bool mouseLeftDown = false;
 		bool mouseRightDown = false;

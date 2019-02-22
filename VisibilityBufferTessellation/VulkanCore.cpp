@@ -15,6 +15,11 @@ namespace vbt
 		CreateSynchronisationObjects();
 	}
 
+	void VulkanCore::RecreateSwapchain(GLFWwindow* window)
+	{
+		swapChain.InitSwapChain(window, physicalDevice.VkHandle(), device);
+	}
+
 	void VulkanCore::CleanUp()
 	{
 		// Destroy Sync Objects
@@ -185,6 +190,7 @@ void VulkanCore::CreateLogicalDevice()
 	VkPhysicalDeviceFeatures deviceFeatures = {};
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 	deviceFeatures.geometryShader = VK_TRUE;
+	deviceFeatures.tessellationShader = VK_TRUE;
 	deviceFeatures.fragmentStoresAndAtomics = VK_TRUE;
 
 	// Create the logical device

@@ -27,22 +27,6 @@ namespace vbt
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 	}
 
-	void SwapChain::RecreateSwapChain(GLFWwindow* window, VkPhysicalDevice physicalDevice, VkDevice device)
-	{
-		// Destroy swapchain and its image views
-		for (size_t i = 0; i < imageViews.size(); i++) {
-			vkDestroyImageView(device, imageViews[i], nullptr);
-		}
-		vkDestroySwapchainKHR(device, swapChain, nullptr);
-
-		// Create swapchain again
-		CreateSwapChain(window, physicalDevice, device);
-
-		// Create Image Views again
-		CreateSwapImageViews(device);
-	}
-
-
 	void SwapChain::CreateSurface(GLFWwindow* window, VkInstance instance)
 	{
 		// GlfwCreateWindowSurface is platform agnostic and creates the surface object for the relevant platform under the hood
