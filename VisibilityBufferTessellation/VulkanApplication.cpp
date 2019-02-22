@@ -151,8 +151,14 @@ void VulkanApplication::ApplySettings(AppSettings settings)
 #pragma region Geometry Functions
 void VulkanApplication::InitialiseTerrains()
 {
-	Terrain::InitInfo visBuffTerrainInfo(64, 32, 5.0f);
-	Terrain::InitInfo tessTerrainInfo(4, 32, 5.0f);
+	Terrain::InitInfo visBuffTerrainInfo;
+	visBuffTerrainInfo.verticesPerEdge = 64; 
+	visBuffTerrainInfo.width = 32;
+	visBuffTerrainInfo.uvScale = 5.0f;
+	Terrain::InitInfo tessTerrainInfo;
+	tessTerrainInfo.verticesPerEdge = 8;
+	tessTerrainInfo.width = 32;
+	tessTerrainInfo.uvScale = 5.0f;
 
 	// Generate terrain geometry
 	visBuffTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, visBuffTerrainInfo);

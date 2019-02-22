@@ -20,12 +20,8 @@ namespace vbt
 			int width = 32;
 			float uvScale = 5.0f;
 
-			InitInfo(int vpe, int w, float uv)
-			{
-				verticesPerEdge = vpe;
-				width = w;
-				uvScale = uv;
-			}
+			InitInfo()
+			{}
 		};
 
 		void Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool, InitInfo info);

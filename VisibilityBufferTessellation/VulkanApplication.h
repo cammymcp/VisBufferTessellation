@@ -185,6 +185,7 @@ namespace vbt
 #pragma endregion
 
 #pragma region Geometry
+		// Two terrains, one detailed, one coarse for tessellation.
 		Terrain visBuffTerrain;
 		Terrain tessTerrain;
 		Buffer mvpUniformBuffer;
