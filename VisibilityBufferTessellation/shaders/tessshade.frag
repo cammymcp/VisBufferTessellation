@@ -30,7 +30,7 @@ layout(location = 1) out vec4 debug;
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
 layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
-layout (input_attachment_index = 1, set = 0, binding = 5) uniform subpassInput inputTessCoords;
+layout (input_attachment_index = 1, set = 0, binding = 5) uniform usubpassInput inputTessCoords;
 layout(set = 0, binding = 2) uniform UniformBufferObject 
 {
     mat4 mvp;
@@ -72,14 +72,19 @@ DerivativesOutput ComputePartialDerivatives(vec2 v[3])
 void main() 
 {
 	// Unpack triangle ID and draw ID from visibility buffer
-	//vec4 visibilityRaw = texelFetch(inputVisibility, ivec2(gl_FragCoord.xy), 0);
 	vec4 visibilityRaw = subpassLoad(inputVisibility);
-	uint DrawIdTriId = packUnorm4x8(visibilityRaw);		
-	debug = vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	uvec4 tessCoordsRaw = subpassLoad(inputTessCoords);
+	uint DrawIdTriId = packUnorm4x8(visibilityRaw);
+	debug = vec4(0.0, 0.0, 0.0, 0.0); // Clear debug image
 
 	// If this pixel doesn't contain triangle data, return early
 	if (DrawIdTriId != 0)
 	{
+		// Output debug tess coords
+		vec4 tessCoordsColour = vec4(float(tessCoordsRaw.x), float(tessCoordsRaw.y), float(tessCoordsRaw.z), 1.0);
+		tessCoordsColour = normalize(tessCoordsColour);
+		debug = tessCoordsColour;
+
 		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the number of draw call to which the triangle belongs
 		uint triangleID = (DrawIdTriId & 0x007FFFFF) - 1; // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID
 		
@@ -129,7 +134,6 @@ void main()
 			vec2 (vertexBuffer[triVert2Index].colYZtexXY.z, vertexBuffer[triVert2Index].colYZtexXY.w)
 		};
 		vec2 interpTexCoords = Interpolate2DAttributes(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta);
-		debug = vec4(interpTexCoords, 0.0f, 1.0f);
 
 		// Get fragment colour from texture
 		vec4 textureDiffuseColour = texture(textureSampler, interpTexCoords);
