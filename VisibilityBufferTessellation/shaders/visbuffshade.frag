@@ -7,8 +7,8 @@
 // Structs
 struct Vertex
 {
-	vec4 posXYZcolX;
-	vec4 colYZtexXY;
+	vec4 posXYZnormX;
+	vec4 normYZtexXY;
 };
 struct Index
 {
@@ -29,7 +29,6 @@ layout(location = 1) out vec4 debug;
 
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
-//layout (set = 0, binding = 1) uniform sampler2D inputVisibility;
 layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
 layout(set = 0, binding = 2) uniform UniformBufferObject 
 {
@@ -72,19 +71,17 @@ DerivativesOutput ComputePartialDerivatives(vec2 v[3])
 void main() 
 {
 	// Unpack triangle ID and draw ID from visibility buffer
-	//vec4 visibilityRaw = texelFetch(inputVisibility, ivec2(gl_FragCoord.xy), 0);
 	vec4 visibilityRaw = subpassLoad(inputVisibility);
-	uint DrawIdTriId = packUnorm4x8(visibilityRaw);		
-	debug = vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	uint DrawIdTriId = packUnorm4x8(visibilityRaw);	
 
 	// If this pixel doesn't contain triangle data, return early
 	if (DrawIdTriId != 0)
 	{
-		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the number of draw call to which the triangle belongs
+		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the index of the draw call to which the triangle belongs
 		uint triangleID = (DrawIdTriId & 0x007FFFFF) - 1; // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID
 		
 		// Index of the first vertex of this draw call's geometry
-		uint startIndex = drawID; // There's only one draw call at the moment, so drawID should always be 0
+		uint startIndex = drawID; // There's only one draw call at the moment, so drawID should always be 0. In the case of a multi draw, this would not work! 
 
 		// Get position in the Index Buffer of each vertex in this triangle (eg 31, 32, 33)
 		uint triVert1IndexBufferPosition = (triangleID * 3 + 0) + startIndex;
@@ -97,9 +94,9 @@ void main()
 		uint triVert2Index = indexBuffer[triVert3IndexBufferPosition].val;
 
 		// Load vertex data of the 3 vertices
-		vec3 vert0Pos = vertexBuffer[triVert0Index].posXYZcolX.xyz;
-		vec3 vert1Pos = vertexBuffer[triVert1Index].posXYZcolX.xyz;
-		vec3 vert2Pos = vertexBuffer[triVert2Index].posXYZcolX.xyz;
+		vec3 vert0Pos = vertexBuffer[triVert0Index].posXYZnormX.xyz;
+		vec3 vert1Pos = vertexBuffer[triVert1Index].posXYZnormX.xyz;
+		vec3 vert2Pos = vertexBuffer[triVert2Index].posXYZnormX.xyz;
 
 		// Transform positions to clip space
 		vec4 clipPos0 = ubo.mvp * vec4(vert0Pos, 1);
@@ -124,9 +121,9 @@ void main()
 		// Interpolate texture coordinates
 		mat3x2 triTexCoords =
 		{
-			vec2 (vertexBuffer[triVert0Index].colYZtexXY.z, vertexBuffer[triVert0Index].colYZtexXY.w),
-			vec2 (vertexBuffer[triVert1Index].colYZtexXY.z, vertexBuffer[triVert1Index].colYZtexXY.w),
-			vec2 (vertexBuffer[triVert2Index].colYZtexXY.z, vertexBuffer[triVert2Index].colYZtexXY.w)
+			vec2 (vertexBuffer[triVert0Index].normYZtexXY.z, vertexBuffer[triVert0Index].normYZtexXY.w),
+			vec2 (vertexBuffer[triVert1Index].normYZtexXY.z, vertexBuffer[triVert1Index].normYZtexXY.w),
+			vec2 (vertexBuffer[triVert2Index].normYZtexXY.z, vertexBuffer[triVert2Index].normYZtexXY.w)
 		};
 		vec2 interpTexCoords = Interpolate2DAttributes(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta);
 		debug = vec4(interpTexCoords, 0.0f, 1.0f);
@@ -141,5 +138,4 @@ void main()
 	{
 		outColour = vec4(0.35f, 0.45f, 0.2f, 1.0f);
 	}
-
 }

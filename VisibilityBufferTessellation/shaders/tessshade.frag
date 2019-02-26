@@ -30,7 +30,7 @@ layout(location = 1) out vec4 debug;
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
 layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
-layout (input_attachment_index = 1, set = 0, binding = 5) uniform subpassInput inputTessCoords;
+layout (input_attachment_index = 1, set = 0, binding = 5) uniform usubpassInput inputTessCoords;
 layout(set = 0, binding = 2) uniform UniformBufferObject 
 {
     mat4 mvp;
@@ -44,6 +44,16 @@ layout (std430, set = 0, binding = 4) readonly buffer VertBuff
 {
 	Vertex vertexBuffer[];
 };
+
+vec2 Interpolate2DLinear(vec2 v0, vec2 v1, vec2 v2, vec3 tessCoord)
+{
+   	return vec2(tessCoord.x) * v0 + vec2(tessCoord.y) * v1 + vec2(tessCoord.z) * v2;
+}
+
+vec3 Interpolate3DLinear(vec3 v0, vec3 v1, vec3 v2, vec3 tessCoord)
+{
+   	return vec3(tessCoord.x) * v0 + vec3(tessCoord.y) * v1 + vec3(tessCoord.z) * v2;
+}
 
 // Interpolate 2D attributes using the partial derivatives and generates dx and dy for texture sampling.
 vec2 Interpolate2DAttributes(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 d)
@@ -69,42 +79,96 @@ DerivativesOutput ComputePartialDerivatives(vec2 v[3])
 	return derivatives;
 }
 
+// Takes draw call ID and primitive ID and returns the three patch control points
+Vertex[3] LoadPatchControlPoints(uint drawID, uint primID)
+{
+	Vertex[3] controlPoints;
+
+	// Index of the first vertex of this draw call's geometry
+	uint startIndex = drawID; // There's only one draw call at the moment, so drawID should always be 0
+
+	// Get position in the Index Buffer of each vertex in this triangle (eg 31, 32, 33)
+	uint triVert1IndexBufferPosition = (primID * 3 + 0) + startIndex;
+	uint triVert2IndexBufferPosition = (primID * 3 + 1) + startIndex;
+	uint triVert3IndexBufferPosition = (primID * 3 + 2) + startIndex;	
+
+	// Now get vertex index from index buffer (eg, 17, 41, 32)
+	uint triVert0Index = indexBuffer[triVert1IndexBufferPosition].val;
+	uint triVert1Index = indexBuffer[triVert2IndexBufferPosition].val;
+	uint triVert2Index = indexBuffer[triVert3IndexBufferPosition].val;
+
+	// Load vertex data of the 3 control points
+	controlPoints[0] = vertexBuffer[triVert0Index];
+	controlPoints[1] = vertexBuffer[triVert1Index];
+	controlPoints[2] = vertexBuffer[triVert2Index];
+
+	return controlPoints;
+}
+
+// Re-evaluates the evaluation stage for the tessellated primitive this fragment belongs to.
+// Takes input patch control points and interpolates to tessellated vertices with stored 
+// tessellation coordinates
+Vertex[3] EvaluateTessellatedPrimitive(Vertex[3] patchControlPoints, uvec4 tessCoordsRaw)
+{
+	Vertex[3] vertices;
+
+	// Extract tessellation (barycentric) coordinates for the three vertices
+	vec3 tessCoord0 = unpackUnorm4x8(tessCoordsRaw.x).xyz;
+	vec3 tessCoord1 = unpackUnorm4x8(tessCoordsRaw.y).xyz;
+	vec3 tessCoord2 = unpackUnorm4x8(tessCoordsRaw.z).xyz;
+	
+	// Interpolate positions
+	vertices[0].posXYZcolX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZcolX.xyz, patchControlPoints[1].posXYZcolX.xyz, patchControlPoints[2].posXYZcolX.xyz, tessCoord0);
+	vertices[1].posXYZcolX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZcolX.xyz, patchControlPoints[1].posXYZcolX.xyz, patchControlPoints[2].posXYZcolX.xyz, tessCoord1);
+	vertices[2].posXYZcolX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZcolX.xyz, patchControlPoints[1].posXYZcolX.xyz, patchControlPoints[2].posXYZcolX.xyz, tessCoord2);
+
+	// Not bothering with normals until lighting is implemented
+	vertices[0].posXYZcolX.w = 0.0; vertices[0].colYZtexXY.xy = vec2(0.0, 1.0);
+	vertices[1].posXYZcolX.w = 0.0;	vertices[1].colYZtexXY.xy = vec2(0.0, 1.0);
+	vertices[2].posXYZcolX.w = 0.0;	vertices[2].colYZtexXY.xy = vec2(0.0, 1.0);
+
+	// Interpolate UV coordinates
+	vertices[0].colYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].colYZtexXY.zw, patchControlPoints[1].colYZtexXY.zw, patchControlPoints[2].colYZtexXY.zw, tessCoord0);
+	vertices[1].colYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].colYZtexXY.zw, patchControlPoints[1].colYZtexXY.zw, patchControlPoints[2].colYZtexXY.zw, tessCoord1);
+	vertices[2].colYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].colYZtexXY.zw, patchControlPoints[1].colYZtexXY.zw, patchControlPoints[2].colYZtexXY.zw, tessCoord2);
+
+	return vertices;
+}
+
 void main() 
 {
 	// Unpack triangle ID and draw ID from visibility buffer
-	//vec4 visibilityRaw = texelFetch(inputVisibility, ivec2(gl_FragCoord.xy), 0);
 	vec4 visibilityRaw = subpassLoad(inputVisibility);
-	uint DrawIdTriId = packUnorm4x8(visibilityRaw);		
-	debug = vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	uvec4 tessCoordsRaw = subpassLoad(inputTessCoords);
+	uint DrawIdTriId = packUnorm4x8(visibilityRaw);
+	debug = vec4(0.0, 0.0, 0.0, 0.0); // Clear debug image
 
 	// If this pixel doesn't contain triangle data, return early
 	if (DrawIdTriId != 0)
 	{
+		// Output debug tess coords
+		vec4 tessCoordsColour = vec4(float(tessCoordsRaw.x), float(tessCoordsRaw.y), float(tessCoordsRaw.z), 1.0);
+		tessCoordsColour = normalize(tessCoordsColour);
+		debug = tessCoordsColour;
+
 		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the number of draw call to which the triangle belongs
 		uint triangleID = (DrawIdTriId & 0x007FFFFF) - 1; // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID
 		
-		// Index of the first vertex of this draw call's geometry
-		uint startIndex = drawID; // There's only one draw call at the moment, so drawID should always be 0
+		// Load input patch control points using visibility buffer data
+		Vertex[3] patchControlPoints = LoadPatchControlPoints(drawID, triangleID);
 
-		// Get position in the Index Buffer of each vertex in this triangle (eg 31, 32, 33)
-		uint triVert1IndexBufferPosition = (triangleID * 3 + 0) + startIndex;
-		uint triVert2IndexBufferPosition = (triangleID * 3 + 1) + startIndex;
-		uint triVert3IndexBufferPosition = (triangleID * 3 + 2) + startIndex;	
-
-		// Now get vertex index from index buffer (eg, 17, 41, 32)
-		uint triVert0Index = indexBuffer[triVert1IndexBufferPosition].val;
-		uint triVert1Index = indexBuffer[triVert2IndexBufferPosition].val;
-		uint triVert2Index = indexBuffer[triVert3IndexBufferPosition].val;
-
-		// Load vertex data of the 3 vertices
-		vec3 vert0Pos = vertexBuffer[triVert0Index].posXYZcolX.xyz;
-		vec3 vert1Pos = vertexBuffer[triVert1Index].posXYZcolX.xyz;
-		vec3 vert2Pos = vertexBuffer[triVert2Index].posXYZcolX.xyz;
+		// Now interpolate to the generated tessellation primitive using stored tess coords
+		Vertex[3] primitiveVertices = EvaluateTessellatedPrimitive(patchControlPoints, tessCoordsRaw);
+		
+		// Get position data of vertices
+		vec3 vertPos0 = primitiveVertices[0].posXYZcolX.xyz;
+		vec3 vertPos1 = primitiveVertices[1].posXYZcolX.xyz;
+		vec3 vertPos2 = primitiveVertices[2].posXYZcolX.xyz;
 
 		// Transform positions to clip space
-		vec4 clipPos0 = ubo.mvp * vec4(vert0Pos, 1);
-		vec4 clipPos1 = ubo.mvp * vec4(vert1Pos, 1);
-		vec4 clipPos2 = ubo.mvp * vec4(vert2Pos, 1);
+		vec4 clipPos0 = ubo.mvp * vec4(vertPos0, 1);
+		vec4 clipPos1 = ubo.mvp * vec4(vertPos1, 1);
+		vec4 clipPos2 = ubo.mvp * vec4(vertPos2, 1);
 
 		// Pre-calculate 1 over w components
 		vec3 oneOverW = 1.0 / vec3(clipPos0.w, clipPos1.w, clipPos2.w);
@@ -124,12 +188,11 @@ void main()
 		// Interpolate texture coordinates
 		mat3x2 triTexCoords =
 		{
-			vec2 (vertexBuffer[triVert0Index].colYZtexXY.z, vertexBuffer[triVert0Index].colYZtexXY.w),
-			vec2 (vertexBuffer[triVert1Index].colYZtexXY.z, vertexBuffer[triVert1Index].colYZtexXY.w),
-			vec2 (vertexBuffer[triVert2Index].colYZtexXY.z, vertexBuffer[triVert2Index].colYZtexXY.w)
+			vec2 (primitiveVertices[0].colYZtexXY.z, primitiveVertices[0].colYZtexXY.w),
+			vec2 (primitiveVertices[1].colYZtexXY.z, primitiveVertices[1].colYZtexXY.w),
+			vec2 (primitiveVertices[2].colYZtexXY.z, primitiveVertices[2].colYZtexXY.w)
 		};
 		vec2 interpTexCoords = Interpolate2DAttributes(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta);
-		debug = vec4(interpTexCoords, 0.0f, 1.0f);
 
 		// Get fragment colour from texture
 		vec4 textureDiffuseColour = texture(textureSampler, interpTexCoords);

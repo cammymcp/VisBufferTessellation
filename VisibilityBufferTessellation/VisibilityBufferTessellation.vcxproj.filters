@@ -184,5 +184,8 @@
     <None Include="shaders\ui.vert">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="shaders\tesswrite.geom">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

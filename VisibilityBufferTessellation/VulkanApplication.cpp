@@ -614,16 +614,19 @@ void VulkanApplication::CreateWritePipelines()
 	vertShaderCode = ReadFile("shaders/tesswrite.vert.spv");
 	auto hullShaderCode = ReadFile("shaders/tesswrite.tesc.spv");
 	auto domainShaderCode = ReadFile("shaders/tesswrite.tese.spv");
+	auto geomShaderCode = ReadFile("shaders/tesswrite.geom.spv");
 	fragShaderCode = ReadFile("shaders/tesswrite.frag.spv");
 
 	// Create shader modules
 	VkShaderModule tessVertShaderModule;
 	VkShaderModule hullShaderModule;
 	VkShaderModule domainShaderModule;
+	VkShaderModule geometryShaderModule;
 	VkShaderModule tessFragShaderModule;
 	tessVertShaderModule = CreateShaderModule(vertShaderCode);
 	hullShaderModule = CreateShaderModule(hullShaderCode);
 	domainShaderModule = CreateShaderModule(domainShaderCode);
+	geometryShaderModule = CreateShaderModule(geomShaderCode);
 	tessFragShaderModule = CreateShaderModule(fragShaderCode);
 
 	// Create shader stages
@@ -638,8 +641,13 @@ void VulkanApplication::CreateWritePipelines()
 	domainShaderStageInfo.stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 	domainShaderStageInfo.module = domainShaderModule;
 	domainShaderStageInfo.pName = "main";
+	VkPipelineShaderStageCreateInfo geometryShaderStageInfo = {}; // Geometry
+	geometryShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	geometryShaderStageInfo.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
+	geometryShaderStageInfo.module = geometryShaderModule;
+	geometryShaderStageInfo.pName = "main";
 	fragShaderStageInfo.module = tessFragShaderModule; // Frag
-	VkPipelineShaderStageCreateInfo tessWriteShaderStages[] = { vertShaderStageInfo, hullShaderStageInfo, domainShaderStageInfo, fragShaderStageInfo };
+	VkPipelineShaderStageCreateInfo tessWriteShaderStages[] = { vertShaderStageInfo, hullShaderStageInfo, domainShaderStageInfo, geometryShaderStageInfo, fragShaderStageInfo };
 
 	// Set up topology input format
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
@@ -661,7 +669,7 @@ void VulkanApplication::CreateWritePipelines()
 	pipelineInfo.layout = tessWritePipelineLayout;
 	pipelineInfo.renderPass = tessRenderPass;
 	pipelineInfo.pStages = tessWriteShaderStages;
-	pipelineInfo.stageCount = 4;
+	pipelineInfo.stageCount = 5;
 	pipelineInfo.pTessellationState = &tessStateInfo;
 	if (vkCreateGraphicsPipelines(vulkan->Device(), pipelineCache, 1, &pipelineInfo, nullptr, &tessWritePipeline) != VK_SUCCESS)
 	{
@@ -672,6 +680,7 @@ void VulkanApplication::CreateWritePipelines()
 	vkDestroyShaderModule(vulkan->Device(), tessVertShaderModule, nullptr);
 	vkDestroyShaderModule(vulkan->Device(), hullShaderModule, nullptr);
 	vkDestroyShaderModule(vulkan->Device(), domainShaderModule, nullptr);
+	vkDestroyShaderModule(vulkan->Device(), geometryShaderModule, nullptr);
 	vkDestroyShaderModule(vulkan->Device(), tessFragShaderModule, nullptr);
 }
 
@@ -753,7 +762,7 @@ void VulkanApplication::CreateRenderPasses()
 	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visibility, allocator); // 32 bit uint will be unpacked into four 8bit floats
 	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &debugAttachment, allocator);
 	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &tessVisibilityBuffer.visibility, allocator); 
-	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &tessVisibilityBuffer.tessCoords, allocator); 
+	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &tessVisibilityBuffer.tessCoords, allocator);
 	CreateDepthResources();
 
 	// Create attachment descriptions
@@ -1375,7 +1384,7 @@ void VulkanApplication::UpdateUniformBuffers()
 
 	// Map tessellation factor to ubo
 	TessFactorUBO tessUbo = {};
-	tessUbo.tessellationFactor = 4.0f;
+	tessUbo.tessellationFactor = 10.0f;
 	tessFactorBuffer.MapData(&tessUbo, allocator);
 }
 
@@ -1435,7 +1444,7 @@ void VulkanApplication::CreateShadePassDescriptorSetLayouts()
 	modelUboLayoutBinding.binding = 2;
 	modelUboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	modelUboLayoutBinding.descriptorCount = 1;
-	modelUboLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; // Specify that this descriptor will be used in the fragment shader
+	modelUboLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT; 
 
 	// Binding 3: Index Buffer
 	VkDescriptorSetLayoutBinding indexBufferBinding = {};

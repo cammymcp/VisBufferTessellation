@@ -7,6 +7,7 @@ glslangvalidator -V tessshade.frag -o tessshade.frag.spv
 glslangvalidator -V tesswrite.vert -o tesswrite.vert.spv
 glslangvalidator -V tesswrite.tesc -o tesswrite.tesc.spv
 glslangvalidator -V tesswrite.tese -o tesswrite.tese.spv
+glslangvalidator -V tesswrite.geom -o tesswrite.geom.spv
 glslangvalidator -V tesswrite.frag -o tesswrite.frag.spv
 glslangvalidator -V ui.vert -o ui.vert.spv
 glslangvalidator -V ui.frag -o ui.frag.spv
