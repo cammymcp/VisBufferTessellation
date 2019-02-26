@@ -1384,7 +1384,7 @@ void VulkanApplication::UpdateUniformBuffers()
 
 	// Map tessellation factor to ubo
 	TessFactorUBO tessUbo = {};
-	tessUbo.tessellationFactor = 4.0f;
+	tessUbo.tessellationFactor = 10.0f;
 	tessFactorBuffer.MapData(&tessUbo, allocator);
 }
 
