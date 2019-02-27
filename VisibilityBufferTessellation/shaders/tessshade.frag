@@ -7,8 +7,8 @@
 // Structs
 struct Vertex
 {
-	vec4 posXYZcolX;
-	vec4 colYZtexXY;
+	vec4 posXYZnormX;
+	vec4 normYZtexXY;
 };
 struct Index
 {
@@ -118,19 +118,19 @@ Vertex[3] EvaluateTessellatedPrimitive(Vertex[3] patchControlPoints, uvec4 tessC
 	vec3 tessCoord2 = unpackUnorm4x8(tessCoordsRaw.z).xyz;
 	
 	// Interpolate positions
-	vertices[0].posXYZcolX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZcolX.xyz, patchControlPoints[1].posXYZcolX.xyz, patchControlPoints[2].posXYZcolX.xyz, tessCoord0);
-	vertices[1].posXYZcolX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZcolX.xyz, patchControlPoints[1].posXYZcolX.xyz, patchControlPoints[2].posXYZcolX.xyz, tessCoord1);
-	vertices[2].posXYZcolX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZcolX.xyz, patchControlPoints[1].posXYZcolX.xyz, patchControlPoints[2].posXYZcolX.xyz, tessCoord2);
+	vertices[0].posXYZnormX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZnormX.xyz, patchControlPoints[1].posXYZnormX.xyz, patchControlPoints[2].posXYZnormX.xyz, tessCoord0);
+	vertices[1].posXYZnormX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZnormX.xyz, patchControlPoints[1].posXYZnormX.xyz, patchControlPoints[2].posXYZnormX.xyz, tessCoord1);
+	vertices[2].posXYZnormX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZnormX.xyz, patchControlPoints[1].posXYZnormX.xyz, patchControlPoints[2].posXYZnormX.xyz, tessCoord2);
 
 	// Not bothering with normals until lighting is implemented
-	vertices[0].posXYZcolX.w = 0.0; vertices[0].colYZtexXY.xy = vec2(0.0, 1.0);
-	vertices[1].posXYZcolX.w = 0.0;	vertices[1].colYZtexXY.xy = vec2(0.0, 1.0);
-	vertices[2].posXYZcolX.w = 0.0;	vertices[2].colYZtexXY.xy = vec2(0.0, 1.0);
+	vertices[0].posXYZnormX.w = 0.0; vertices[0].normYZtexXY.xy = vec2(0.0, 1.0);
+	vertices[1].posXYZnormX.w = 0.0;	vertices[1].normYZtexXY.xy = vec2(0.0, 1.0);
+	vertices[2].posXYZnormX.w = 0.0;	vertices[2].normYZtexXY.xy = vec2(0.0, 1.0);
 
 	// Interpolate UV coordinates
-	vertices[0].colYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].colYZtexXY.zw, patchControlPoints[1].colYZtexXY.zw, patchControlPoints[2].colYZtexXY.zw, tessCoord0);
-	vertices[1].colYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].colYZtexXY.zw, patchControlPoints[1].colYZtexXY.zw, patchControlPoints[2].colYZtexXY.zw, tessCoord1);
-	vertices[2].colYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].colYZtexXY.zw, patchControlPoints[1].colYZtexXY.zw, patchControlPoints[2].colYZtexXY.zw, tessCoord2);
+	vertices[0].normYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].normYZtexXY.zw, patchControlPoints[1].normYZtexXY.zw, patchControlPoints[2].normYZtexXY.zw, tessCoord0);
+	vertices[1].normYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].normYZtexXY.zw, patchControlPoints[1].normYZtexXY.zw, patchControlPoints[2].normYZtexXY.zw, tessCoord1);
+	vertices[2].normYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].normYZtexXY.zw, patchControlPoints[1].normYZtexXY.zw, patchControlPoints[2].normYZtexXY.zw, tessCoord2);
 
 	return vertices;
 }
@@ -161,9 +161,9 @@ void main()
 		Vertex[3] primitiveVertices = EvaluateTessellatedPrimitive(patchControlPoints, tessCoordsRaw);
 		
 		// Get position data of vertices
-		vec3 vertPos0 = primitiveVertices[0].posXYZcolX.xyz;
-		vec3 vertPos1 = primitiveVertices[1].posXYZcolX.xyz;
-		vec3 vertPos2 = primitiveVertices[2].posXYZcolX.xyz;
+		vec3 vertPos0 = primitiveVertices[0].posXYZnormX.xyz;
+		vec3 vertPos1 = primitiveVertices[1].posXYZnormX.xyz;
+		vec3 vertPos2 = primitiveVertices[2].posXYZnormX.xyz;
 
 		// Transform positions to clip space
 		vec4 clipPos0 = ubo.mvp * vec4(vertPos0, 1);
@@ -188,9 +188,9 @@ void main()
 		// Interpolate texture coordinates
 		mat3x2 triTexCoords =
 		{
-			vec2 (primitiveVertices[0].colYZtexXY.z, primitiveVertices[0].colYZtexXY.w),
-			vec2 (primitiveVertices[1].colYZtexXY.z, primitiveVertices[1].colYZtexXY.w),
-			vec2 (primitiveVertices[2].colYZtexXY.z, primitiveVertices[2].colYZtexXY.w)
+			vec2 (primitiveVertices[0].normYZtexXY.z, primitiveVertices[0].normYZtexXY.w),
+			vec2 (primitiveVertices[1].normYZtexXY.z, primitiveVertices[1].normYZtexXY.w),
+			vec2 (primitiveVertices[2].normYZtexXY.z, primitiveVertices[2].normYZtexXY.w)
 		};
 		vec2 interpTexCoords = Interpolate2DAttributes(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta);
 

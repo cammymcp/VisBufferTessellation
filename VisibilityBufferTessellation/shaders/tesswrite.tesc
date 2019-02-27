@@ -9,12 +9,6 @@ layout(binding = 0) uniform UniformBufferObject
 } ubo;
 
 layout (vertices = 3) out;
- 
-layout (location = 0) in vec3 inNormal[];
-layout (location = 1) in vec2 inTexCoords[];
- 
-layout (location = 0) out vec3 outNormal[3];
-layout (location = 1) out vec2 outTexCoords[3];
 
 void main()
 {
@@ -38,7 +32,6 @@ void main()
 		}
 	}
 
+	// Pass world position through
 	gl_out[gl_InvocationID].gl_Position =  gl_in[gl_InvocationID].gl_Position;
-	outNormal[gl_InvocationID] = inNormal[gl_InvocationID];
-	outTexCoords[gl_InvocationID] = inTexCoords[gl_InvocationID];
 } 

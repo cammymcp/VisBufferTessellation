@@ -68,6 +68,32 @@ DerivativesOutput ComputePartialDerivatives(vec2 v[3])
 	return derivatives;
 }
 
+// Takes draw call ID and primitive ID and returns the three patch control points
+Vertex[3] LoadTriangleVertices(uint drawID, uint primID)
+{
+	Vertex[3] vertices;
+
+	// Index of the first vertex of this draw call's geometry
+	uint startIndex = drawID; // There's only one draw call at the moment, so drawID should always be 0. This would work out the offset of the first vertex in the nth draw call if using MultiDraw commands. 
+
+	// Get position in the Index Buffer of each vertex in this triangle (eg 31, 32, 33)
+	uint triVert1IndexBufferPosition = (primID * 3 + 0) + startIndex;
+	uint triVert2IndexBufferPosition = (primID * 3 + 1) + startIndex;
+	uint triVert3IndexBufferPosition = (primID * 3 + 2) + startIndex;	
+
+	// Now get vertex index from index buffer (eg, 17, 41, 32)
+	uint triVert0Index = indexBuffer[triVert1IndexBufferPosition].val;
+	uint triVert1Index = indexBuffer[triVert2IndexBufferPosition].val;
+	uint triVert2Index = indexBuffer[triVert3IndexBufferPosition].val;
+
+	// Load vertex data of the 3 control points
+	vertices[0] = vertexBuffer[triVert0Index];
+	vertices[1] = vertexBuffer[triVert1Index];
+	vertices[2] = vertexBuffer[triVert2Index];
+
+	return vertices;
+}
+
 void main() 
 {
 	// Unpack triangle ID and draw ID from visibility buffer
@@ -78,25 +104,15 @@ void main()
 	if (DrawIdTriId != 0)
 	{
 		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the index of the draw call to which the triangle belongs
-		uint triangleID = (DrawIdTriId & 0x007FFFFF) - 1; // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID
+		uint triangleID = (DrawIdTriId & 0x007FFFFF) - 1; // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID		
 		
-		// Index of the first vertex of this draw call's geometry
-		uint startIndex = drawID; // There's only one draw call at the moment, so drawID should always be 0. In the case of a multi draw, this would not work! 
+		// Load triangle vertices using visibility buffer data
+		Vertex[3] vertices = LoadTriangleVertices(drawID, triangleID);
 
-		// Get position in the Index Buffer of each vertex in this triangle (eg 31, 32, 33)
-		uint triVert1IndexBufferPosition = (triangleID * 3 + 0) + startIndex;
-		uint triVert2IndexBufferPosition = (triangleID * 3 + 1) + startIndex;
-		uint triVert3IndexBufferPosition = (triangleID * 3 + 2) + startIndex;	
-
-		// Now get vertex index from index buffer (eg, 17, 41, 32)
-		uint triVert0Index = indexBuffer[triVert1IndexBufferPosition].val;
-		uint triVert1Index = indexBuffer[triVert2IndexBufferPosition].val;
-		uint triVert2Index = indexBuffer[triVert3IndexBufferPosition].val;
-
-		// Load vertex data of the 3 vertices
-		vec3 vert0Pos = vertexBuffer[triVert0Index].posXYZnormX.xyz;
-		vec3 vert1Pos = vertexBuffer[triVert1Index].posXYZnormX.xyz;
-		vec3 vert2Pos = vertexBuffer[triVert2Index].posXYZnormX.xyz;
+		// Load position data of the 3 vertices
+		vec3 vert0Pos = vertices[0].posXYZnormX.xyz;
+		vec3 vert1Pos = vertices[1].posXYZnormX.xyz;
+		vec3 vert2Pos = vertices[2].posXYZnormX.xyz;
 
 		// Transform positions to clip space
 		vec4 clipPos0 = ubo.mvp * vec4(vert0Pos, 1);
@@ -121,9 +137,9 @@ void main()
 		// Interpolate texture coordinates
 		mat3x2 triTexCoords =
 		{
-			vec2 (vertexBuffer[triVert0Index].normYZtexXY.z, vertexBuffer[triVert0Index].normYZtexXY.w),
-			vec2 (vertexBuffer[triVert1Index].normYZtexXY.z, vertexBuffer[triVert1Index].normYZtexXY.w),
-			vec2 (vertexBuffer[triVert2Index].normYZtexXY.z, vertexBuffer[triVert2Index].normYZtexXY.w)
+			vec2 (vertices[0].normYZtexXY.z, vertices[0].normYZtexXY.w),
+			vec2 (vertices[1].normYZtexXY.z, vertices[1].normYZtexXY.w),
+			vec2 (vertices[2].normYZtexXY.z, vertices[2].normYZtexXY.w)
 		};
 		vec2 interpTexCoords = Interpolate2DAttributes(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta);
 		debug = vec4(interpTexCoords, 0.0f, 1.0f);

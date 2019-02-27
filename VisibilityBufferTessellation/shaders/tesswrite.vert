@@ -9,17 +9,13 @@ layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inTexCoords;
 
 // Out
-layout(location = 0) out vec3 outNormal;
-layout(location = 1) out vec2 outTexCoords;
 out gl_PerVertex
 {
 	vec4 gl_Position;
 };
 
-// Simple passthrough
+// Simple passthrough, only position is required. 
 void main() 
 {
 	gl_Position = vec4(inPosition, 1.0);
-	outNormal = inNormal;
-	outTexCoords = inTexCoords;
 }
