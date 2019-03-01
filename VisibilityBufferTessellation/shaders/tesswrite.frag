@@ -13,9 +13,8 @@ layout (location = 1) flat in int primitiveID;
 
 // Out 
 layout(location = 0) out vec4 outColour;
-layout(location = 1) out vec4 debug;
-layout(location = 2) out vec4 visBuff;
-layout(location = 3) out uvec4 tessCoordsBuff;
+layout(location = 1) out vec4 visBuff;
+layout(location = 2) out uvec4 tessCoordsBuff;
 
 // Engel's packing function (without alpha bit)
 uint calculateOutputVBID(uint drawID, uint primitiveID)
@@ -28,7 +27,6 @@ void main()
 {
 	// Write to colour attachments to avoid undefined behaviour
 	outColour = vec4(0.0); 
-	debug = vec4(0.0);
 
 	// Fill visibility buffer
 	visBuff = unpackUnorm4x8(calculateOutputVBID(0, primitiveID + 1)); // Offset primitive ID so that the first primitive in each draw call is not lost due to being 0
@@ -36,5 +34,4 @@ void main()
 	
 	vec4 tessCoordsColour = tessCoordsBuff;
 	tessCoordsColour = normalize(tessCoordsColour);
-	debug = tessCoordsColour;
 }

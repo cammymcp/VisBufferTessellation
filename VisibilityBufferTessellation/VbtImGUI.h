@@ -23,6 +23,11 @@ namespace vbt
 		glm::vec3 cameraPos;
 		glm::vec3 cameraRot;
 		PipelineType pipeline;
+		int tessellationFactor = 10;
+		bool showVisBuff = false;
+		bool showTessBuff = false;
+		bool showInterpTex = false;
+		bool wireframe = false;
 		bool updateSettings = false; // When true this class will call the UpdateSettings function of the appHandle
 	};
 

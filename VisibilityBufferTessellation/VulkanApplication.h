@@ -42,9 +42,13 @@ struct MVPUniformBufferObject
 	glm::mat4 proj;
 };
 
-struct TessFactorUBO
+struct SettingsUBO
 {
-	float tessellationFactor;
+	uint32_t tessellationFactor = 10;
+	uint32_t showVisibilityBuffer = 0;
+	uint32_t showTessCoordsBuffer = 0;
+	uint32_t showInterpolatedTex = 0;
+	uint32_t wireframe = 0;
 };
 #pragma endregion
 
@@ -154,6 +158,7 @@ namespace vbt
 		VmaAllocator allocator;
 		std::vector<VkCommandBuffer> commandBuffers;
 		vbt::Image depthImage;
+		Buffer settingsBuffer;
 #pragma endregion
 
 #pragma region Visibility Buffer Pipeline 
@@ -189,21 +194,17 @@ namespace vbt
 		Terrain visBuffTerrain;
 		Terrain tessTerrain;
 		Buffer mvpUniformBuffer;
-		Buffer tessFactorBuffer;
 #pragma endregion
 
 #pragma region Input, Settings, Counters and Flags
 		PipelineType currentPipeline = VISIBILITYBUFFER;
+		SettingsUBO renderSettingsUbo;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;
 		float frameTime = 0.0f;
 		glm::vec2 mousePosition = glm::vec3();
 		bool mouseLeftDown = false;
 		bool mouseRightDown = false;
-#pragma endregion
-
-#pragma region Debug Objects
-		Image debugAttachment;
 #pragma endregion
 	};
 }

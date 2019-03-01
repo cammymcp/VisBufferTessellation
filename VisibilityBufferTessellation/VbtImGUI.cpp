@@ -89,23 +89,23 @@ namespace vbt
 				ResetFrameGraph();
 			}
 		}
-		if (ImGui::CollapsingHeader("Camera"))
+		if (ImGui::CollapsingHeader("Camera"), ImGuiTreeNodeFlags_DefaultOpen)
 		{
 			ImGui::Text("Position: "); 
 			ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.2f);
-			ImGui::SameLine(); if (ImGui::InputFloat("x##pos", &(currentSettings.cameraPos.x), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
-			ImGui::SameLine(); if (ImGui::InputFloat("y##pos", &(currentSettings.cameraPos.y), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
-			ImGui::SameLine(); if (ImGui::InputFloat("z##pos", &(currentSettings.cameraPos.z), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("x##pos", &(currentSettings.cameraPos.x), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("y##pos", &(currentSettings.cameraPos.y), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("z##pos", &(currentSettings.cameraPos.z), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
 			ImGui::PopItemWidth();
 			ImGui::Separator();
 			ImGui::Text("Rotation: ");
 			ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.2f);
-			ImGui::SameLine(); if (ImGui::InputFloat("x##rot", &(currentSettings.cameraRot.x), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
-			ImGui::SameLine(); if (ImGui::InputFloat("y##rot", &(currentSettings.cameraRot.y), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
-			ImGui::SameLine(); if (ImGui::InputFloat("z##rot", &(currentSettings.cameraRot.z), 0.0f, 0.0f, "%.1f")) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("x##rot", &(currentSettings.cameraRot.x), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("y##rot", &(currentSettings.cameraRot.y), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("z##rot", &(currentSettings.cameraRot.z), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
 			ImGui::PopItemWidth();
 		}
-		if (ImGui::CollapsingHeader("Pipelines"))
+		if (ImGui::CollapsingHeader("Pipelines"), ImGuiTreeNodeFlags_DefaultOpen)
 		{
 			ImGui::Text("Switch Pipeline");
 			if (ImGui::Button("Visibility Buffer", ImVec2(150, 20)))
@@ -126,6 +126,14 @@ namespace vbt
 				}
 			}
 			ImGui::Text(currentSettings.pipeline == VISIBILITYBUFFER ? "Current: Visibility Buffer" : "Current: Vis Buff + Tessellation");
+		}
+		if (ImGui::CollapsingHeader("Render Settings"), ImGuiTreeNodeFlags_DefaultOpen)
+		{
+			if (ImGui::Checkbox("Show Visibility Buffer", &(currentSettings.showVisBuff))) currentSettings.updateSettings = true;
+			if (ImGui::Checkbox("Show Interpolated UV Coords", &(currentSettings.showInterpTex))) currentSettings.updateSettings = true;
+			if (currentSettings.pipeline == VB_TESSELLATION) if(ImGui::Checkbox("Show Tess Coords Buffer", &(currentSettings.showTessBuff))) currentSettings.updateSettings = true;
+			if (ImGui::Checkbox("Wireframe", &(currentSettings.wireframe))) currentSettings.updateSettings = true;
+			if (currentSettings.pipeline == VB_TESSELLATION) if(ImGui::SliderInt("Tess Factor", &(currentSettings.tessellationFactor), 2, 16)) currentSettings.updateSettings = true;
 		}
 		ImGui::End();
 		ImGui::Render();

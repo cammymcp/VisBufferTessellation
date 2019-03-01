@@ -5,8 +5,12 @@
 
 layout(binding = 0) uniform UniformBufferObject
 {
-	float tessellationFactor;
-} ubo;
+	uint tessellationFactor;
+	uint showVisibilityBuffer;
+	uint showTessCoordsBuffer;
+	uint showInterpolatedTexCoords;
+	uint wireframe;
+} settings;
 
 layout (vertices = 3) out;
 
@@ -14,12 +18,12 @@ void main()
 {
 	if (gl_InvocationID == 0)
 	{
-		if (ubo.tessellationFactor > 0.0)
+		if (settings.tessellationFactor > 0)
 		{
-			gl_TessLevelOuter[0] = ubo.tessellationFactor;
-			gl_TessLevelOuter[1] = ubo.tessellationFactor;
-			gl_TessLevelOuter[2] = ubo.tessellationFactor;
-			gl_TessLevelInner[0] = ubo.tessellationFactor;
+			gl_TessLevelOuter[0] = settings.tessellationFactor;
+			gl_TessLevelOuter[1] = settings.tessellationFactor;
+			gl_TessLevelOuter[2] = settings.tessellationFactor;
+			gl_TessLevelInner[0] = settings.tessellationFactor;
 		}
 		else
 		{

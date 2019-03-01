@@ -25,13 +25,12 @@ layout(location = 0) in vec2 inScreenPos;
 
 // Out
 layout(location = 0) out vec4 outColour;
-layout(location = 1) out vec4 debug;
 
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
 layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
-layout (input_attachment_index = 1, set = 0, binding = 5) uniform usubpassInput inputTessCoords;
-layout(set = 0, binding = 2) uniform UniformBufferObject 
+layout (input_attachment_index = 1, set = 0, binding = 6) uniform usubpassInput inputTessCoords;
+layout(set = 0, binding = 2) uniform MVPUniformBufferObject 
 {
     mat4 mvp;
     mat4 proj;
@@ -44,6 +43,14 @@ layout (std430, set = 0, binding = 4) readonly buffer VertBuff
 {
 	Vertex vertexBuffer[];
 };
+layout(set = 0, binding = 5) uniform SettingsUniformBufferObject
+{
+	uint tessellationFactor;
+	uint showVisibilityBuffer;
+	uint showTessCoordsBuffer;
+	uint showInterpolatedTexCoords;
+	uint wireframe;
+} settings;
 
 vec2 Interpolate2DLinear(vec2 v0, vec2 v1, vec2 v2, vec3 tessCoord)
 {
@@ -141,15 +148,13 @@ void main()
 	vec4 visibilityRaw = subpassLoad(inputVisibility);
 	uvec4 tessCoordsRaw = subpassLoad(inputTessCoords);
 	uint DrawIdTriId = packUnorm4x8(visibilityRaw);
-	debug = vec4(0.0, 0.0, 0.0, 0.0); // Clear debug image
 
 	// If this pixel doesn't contain triangle data, return early
-	if (DrawIdTriId != 0)
+	if (visibilityRaw != vec4(0.0))
 	{
 		// Output debug tess coords
 		vec4 tessCoordsColour = vec4(float(tessCoordsRaw.x), float(tessCoordsRaw.y), float(tessCoordsRaw.z), 1.0);
 		tessCoordsColour = normalize(tessCoordsColour);
-		debug = tessCoordsColour;
 
 		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the number of draw call to which the triangle belongs
 		uint triangleID = (DrawIdTriId & 0x007FFFFF) - 1; // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID
@@ -199,6 +204,14 @@ void main()
 
 		// Final Fragment colour
 		outColour = textureDiffuseColour;
+
+		// Draw visibility buffer images instead if settings are used.
+		if (settings.showVisibilityBuffer == 1)
+			outColour = visibilityRaw;
+		else if (settings.showTessCoordsBuffer == 1)
+			outColour = tessCoordsColour;
+		else if (settings.showInterpolatedTexCoords == 1)
+			outColour = vec4(normalize(abs(interpTexCoords)), 0.0f, 1.0f);
 	}
 	else
 	{

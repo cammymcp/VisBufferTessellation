@@ -25,7 +25,6 @@ layout(location = 0) in vec2 inScreenPos;
 
 // Out
 layout(location = 0) out vec4 outColour;
-layout(location = 1) out vec4 debug;
 
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
@@ -43,6 +42,14 @@ layout (std430, set = 0, binding = 4) readonly buffer VertBuff
 {
 	Vertex vertexBuffer[];
 };
+layout(set = 0, binding = 5) uniform SettingsUniformBufferObject
+{
+	uint tessellationFactor;
+	uint showVisibilityBuffer;
+	uint showTessCoordsBuffer;
+	uint showInterpolatedTexCoords;
+	uint wireframe;
+} settings;
 
 // Interpolate 2D attributes using the partial derivatives and generates dx and dy for texture sampling.
 vec2 Interpolate2DAttributes(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 d)
@@ -101,7 +108,7 @@ void main()
 	uint DrawIdTriId = packUnorm4x8(visibilityRaw);	
 
 	// If this pixel doesn't contain triangle data, return early
-	if (DrawIdTriId != 0)
+	if (visibilityRaw != vec4(0.0))
 	{
 		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the index of the draw call to which the triangle belongs
 		uint triangleID = (DrawIdTriId & 0x007FFFFF) - 1; // Triangle ID is the offset of the triangle within the draw call. i.e. it is relative to drawID		
@@ -142,13 +149,18 @@ void main()
 			vec2 (vertices[2].normYZtexXY.z, vertices[2].normYZtexXY.w)
 		};
 		vec2 interpTexCoords = Interpolate2DAttributes(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta);
-		debug = vec4(interpTexCoords, 0.0f, 1.0f);
 
 		// Get fragment colour from texture
 		vec4 textureDiffuseColour = texture(textureSampler, interpTexCoords);
 
 		// Final Fragment colour
 		outColour = textureDiffuseColour;
+
+		// Draw visibility buffer instead if setting is used.
+		if (settings.showVisibilityBuffer == 1)
+			outColour = visibilityRaw;
+		else if (settings.showInterpolatedTexCoords == 1)
+			outColour = vec4(normalize(abs(interpTexCoords)), 0.0f, 1.0f);
 	}
 	else
 	{
