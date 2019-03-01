@@ -127,6 +127,21 @@ void VulkanApplication::InitImGui(VkRenderPass renderPass)
 	imGui.Update(0.0f, camera.Position(), camera.Rotation()); // Update imgui frame once to populate buffers
 }
 
+void VulkanApplication::RecreateImGui(VkRenderPass renderPass)
+{
+	ImGui_ImplVulkan_InitInfo initInfo = {};
+	initInfo.Instance = vulkan->Instance();
+	initInfo.PhysicalDevice = vulkan->PhysDevice().VkHandle();
+	initInfo.Device = vulkan->Device();
+	initInfo.QueueFamily = PhysicalDevice::FindQueueFamilies(vulkan->PhysDevice().VkHandle(), vulkan->Swapchain().Surface()).graphicsFamily.value();
+	initInfo.Queue = vulkan->PhysDevice().Queues()->graphics;
+	initInfo.PipelineCache = pipelineCache;
+	initInfo.Allocator = nullptr;
+	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
+	imGui.Recreate(&initInfo, renderPass, commandPool);
+	imGui.Update(0.0f, camera.Position(), camera.Rotation());
+}
+
 void VulkanApplication::ApplySettings(AppSettings settings)
 {
 	// Camera
@@ -142,8 +157,7 @@ void VulkanApplication::ApplySettings(AppSettings settings)
 		vkDeviceWaitIdle(vulkan->Device());
 
 		// Need to reinitialise ImGui to be compatible with new renderpass
-		imGui.CleanUp();
-		InitImGui(currentPipeline == VISIBILITYBUFFER ? visBuffRenderPass : tessRenderPass);
+		RecreateImGui(currentPipeline == VISIBILITYBUFFER ? visBuffRenderPass : tessRenderPass);
 
 		// Reset render settings
 		renderSettingsUbo.showTessCoordsBuffer = false;
@@ -187,6 +201,7 @@ void VulkanApplication::ProcessKeyInput(GLFWwindow* window, int key, int scancod
 	void *data = glfwGetWindowUserPointer(window);
 	VulkanApplication* vulkanApp = static_cast<VulkanApplication*>(data);
 
+	// Camera movement
 	if (key == GLFW_KEY_W)
 	{
 		if (action == GLFW_PRESS)

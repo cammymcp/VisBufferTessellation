@@ -79,6 +79,7 @@ namespace vbt
 
 #pragma region ImGui Functions
 		void InitImGui(VkRenderPass renderPass);
+		void RecreateImGui(VkRenderPass renderPass);
 #pragma endregion
 
 #pragma region Geometry Functions

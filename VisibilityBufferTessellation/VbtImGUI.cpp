@@ -21,7 +21,27 @@ namespace vbt
 		ImGui::StyleColorsDark();
 
 		// Setup bindings to vulkan objects
-		ImGui_ImplGlfw_InitForVulkan(window, false);
+		ImGui_ImplGlfw_InitForVulkan(window, true);
+		ImGui_ImplVulkan_InitInfo initInfo = *info;
+		initInfo.DescriptorPool = descriptorPool;
+		ImGui_ImplVulkanVbt_Init(&initInfo, renderPass);
+
+		// Load Fonts
+		vbt::PhysicalDevice physDevice = appHandle->GetVulkanCore()->PhysDevice();
+		VkCommandBuffer fontCmd = BeginSingleTimeCommands(info->Device, commandPool);
+		ImGui_ImplVulkan_CreateFontsTexture(fontCmd);
+		EndSingleTimeCommands(fontCmd, info->Device, physDevice, commandPool);
+		ImGui_ImplVulkan_InvalidateFontUploadObjects();
+	}
+
+	// Reinitialises ImGui for new render pass configuration
+	void ImGUI::Recreate(ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool)
+	{
+		vkDestroyDescriptorPool(appHandle->GetVulkanCore()->Device(), descriptorPool, nullptr);
+		ImGui_ImplVulkan_Shutdown();
+
+		CreateVulkanResources();
+
 		ImGui_ImplVulkan_InitInfo initInfo = *info;
 		initInfo.DescriptorPool = descriptorPool;
 		ImGui_ImplVulkanVbt_Init(&initInfo, renderPass);

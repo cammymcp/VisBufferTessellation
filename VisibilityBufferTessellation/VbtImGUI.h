@@ -36,6 +36,7 @@ namespace vbt
 	{
 	public:
 		void Init(VulkanApplication* app, GLFWwindow* window, ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool);
+		void Recreate(ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool);
 		void CreateVulkanResources();
 		void Update(float frameTime, glm::vec3 cameraPos, glm::vec3 cameraRot);
 		void DrawFrame(VkCommandBuffer commandBuffer);

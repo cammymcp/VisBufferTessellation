@@ -160,23 +160,18 @@ namespace vbt
 	// Mailbox (V-sync that replaces queued images when full. Can be used for triple buffering)
 	VkPresentModeKHR SwapChain::ChoosePresentMode(const std::vector<VkPresentModeKHR> availablePresentModes)
 	{
-		//// Only Fifo is guaranteed to be available, so use that as a default
-		//VkPresentModeKHR bestMode = VK_PRESENT_MODE_FIFO_KHR;
-		//
-		//for (const auto& availablePresentMode : availablePresentModes)
-		//{
-		//	// Triple buffering is nice, lets try for Mailbox first
-		//	if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
-		//	{
-		//		return availablePresentMode;
-		//	}
-		//	// Prefer immediate over Fifo, since some drivers unfortunately dont support it
-		//	else if(availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR)
-		//	{
-		//		bestMode = availablePresentMode;
-		//	}
-		//}
-		return VK_PRESENT_MODE_FIFO_KHR;
+		// Only Fifo is guaranteed to be available, so use that as a default
+		VkPresentModeKHR bestMode = VK_PRESENT_MODE_FIFO_KHR;
+		
+		for (const auto& availablePresentMode : availablePresentModes)
+		{
+			// Prefer mailbox over Fifo
+			if(availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+			{
+				return availablePresentMode;
+			}
+		}
+		return bestMode;
 	}
 
 	// Swap extent is the resolution of the swap chain images. This is *almost* always exactly equal to 
