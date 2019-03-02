@@ -13,6 +13,7 @@ layout(binding = 2) uniform sampler2D heightmap;
 
 // In
 layout(triangles, equal_spacing, cw) in;
+layout(location = 0) in vec2 inTexCoords[];
 
 // Out
 layout (location = 0) out vec3 outTessCoords;
@@ -33,7 +34,8 @@ void main()
 	vec3 pos = interpolate3D(gl_in[0].gl_Position.xyz, gl_in[1].gl_Position.xyz, gl_in[2].gl_Position.xyz);
 
 	// Displace height
-	//pos.y -= textureLod(heightmap, outTexCoords, 0.0).r * /*ubo.displacementFactor*/ 8;
+	vec2 tex = interpolate2D(inTexCoords[0], inTexCoords[1], inTexCoords[2]);
+	pos.y += textureLod(heightmap, tex / 5.0, 0.0).r * 8;
 
 	// Perspective projection
 	gl_Position = ubo.mvp * vec4(pos, 1.0);

@@ -14,6 +14,10 @@ layout(binding = 0) uniform UniformBufferObject
 
 layout (vertices = 3) out;
 
+layout (location = 0) in vec2 inTexCoords[];
+
+layout (location = 0) out vec2 outTexCoords[3];
+
 void main()
 {
 	if (gl_InvocationID == 0)
@@ -38,4 +42,5 @@ void main()
 
 	// Pass world position through
 	gl_out[gl_InvocationID].gl_Position =  gl_in[gl_InvocationID].gl_Position;
+	outTexCoords[gl_InvocationID] = inTexCoords[gl_InvocationID];
 } 

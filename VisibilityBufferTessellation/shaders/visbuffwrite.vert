@@ -25,12 +25,12 @@ out gl_PerVertex
 
 void main() 
 {
-	// Apply heightmap
-	//vec3 pos = inPosition;
-	//pos.y += textureLod(heightmap, texCoords, 0.0).r * 8;
+	// Displace height 
+	vec3 pos = inPosition;
+	pos.y += textureLod(heightmap, inTexCoords / 5.0, 0.0).r * 8;
 
 	// Screen Position
-	vec4 vertScreenPos = ubo.mvp * vec4(inPosition, 1.0);
+	vec4 vertScreenPos = ubo.mvp * vec4(pos, 1.0);
     gl_Position = vertScreenPos;
 
 	// DrawID

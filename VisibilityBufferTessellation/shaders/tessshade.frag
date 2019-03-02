@@ -29,7 +29,7 @@ layout(location = 0) out vec4 outColour;
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
 layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
-layout (input_attachment_index = 1, set = 0, binding = 6) uniform usubpassInput inputTessCoords;
+layout (input_attachment_index = 1, set = 0, binding = 7) uniform usubpassInput inputTessCoords;
 layout(set = 0, binding = 2) uniform MVPUniformBufferObject 
 {
     mat4 mvp;
@@ -51,6 +51,7 @@ layout(set = 0, binding = 5) uniform SettingsUniformBufferObject
 	uint showInterpolatedTexCoords;
 	uint wireframe;
 } settings;
+layout(set = 0, binding = 6) uniform sampler2D heightmap;
 
 vec2 Interpolate2DLinear(vec2 v0, vec2 v1, vec2 v2, vec3 tessCoord)
 {
@@ -168,7 +169,12 @@ void main()
 		// Get position data of vertices
 		vec3 vertPos0 = primitiveVertices[0].posXYZnormX.xyz;
 		vec3 vertPos1 = primitiveVertices[1].posXYZnormX.xyz;
-		vec3 vertPos2 = primitiveVertices[2].posXYZnormX.xyz;
+		vec3 vertPos2 = primitiveVertices[2].posXYZnormX.xyz;		
+	
+		// Now displace each vertex by heightmap
+		vertPos0.y += textureLod(heightmap, primitiveVertices[0].normYZtexXY.zw / 5.0, 0.0).r * 8;
+		vertPos1.y += textureLod(heightmap, primitiveVertices[1].normYZtexXY.zw / 5.0, 0.0).r * 8;
+		vertPos2.y += textureLod(heightmap, primitiveVertices[2].normYZtexXY.zw / 5.0, 0.0).r * 8;
 
 		// Transform positions to clip space
 		vec4 clipPos0 = ubo.mvp * vec4(vertPos0, 1);

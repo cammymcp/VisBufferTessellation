@@ -18,9 +18,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #pragma region Constants
-const int WIDTH = 1280;
-const int HEIGHT = 720;
-const std::string MODEL_PATH = "models/chalet.obj";
+const int WIDTH = 1920;
+const int HEIGHT = 1080;
 #pragma endregion
 
 #pragma region Frame Buffers
@@ -44,7 +43,7 @@ struct MVPUniformBufferObject
 
 struct SettingsUBO
 {
-	uint32_t tessellationFactor = 10;
+	uint32_t tessellationFactor = 34;
 	uint32_t showVisibilityBuffer = 0;
 	uint32_t showTessCoordsBuffer = 0;
 	uint32_t showInterpolatedTex = 0;
@@ -206,6 +205,8 @@ namespace vbt
 		glm::vec2 mousePosition = glm::vec3();
 		bool mouseLeftDown = false;
 		bool mouseRightDown = false;
+		int visBuffTerrainTriCount = 0;
+		int tessTerrainTriCount = 0;
 #pragma endregion
 	};
 }

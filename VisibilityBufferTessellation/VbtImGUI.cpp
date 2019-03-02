@@ -4,10 +4,12 @@
 
 namespace vbt
 {	
-	void ImGUI::Init(VulkanApplication* app, GLFWwindow* window, ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool)
+	void ImGUI::Init(VulkanApplication* app, GLFWwindow* window, ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool, int visBuffTriCount, int tessTriCount)
 	{
-		// Store app instance
+		// Store app instance and triangle counts
 		appHandle = app;
+		this->visBuffTriCount = visBuffTriCount;
+		this->tessTricount = tessTriCount; // Tri-count in host memory won't change, subdivision is calculated locally per-frame
 
 		// Create vulkan resources
 		CreateVulkanResources();
@@ -81,6 +83,9 @@ namespace vbt
 		currentSettings.cameraRot.y = WrapAngle(cameraRot.y);
 		currentSettings.cameraRot.z = WrapAngle(cameraRot.z);
 
+		// Calculate tessellation tri-count at current tess factor
+		int tessCount = tessTricount * CalculateTriangleSubdivision(currentSettings.tessellationFactor);
+
 		// Start the Dear ImGui frame
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
@@ -108,6 +113,8 @@ namespace vbt
 			{
 				ResetFrameGraph();
 			}
+			ImGui::Text("Visibility Buffer Triangle Count: %d", visBuffTriCount);
+			ImGui::Text("Tessellated Triangle Count: %d", tessCount);
 		}
 		if (ImGui::CollapsingHeader("Camera"), ImGuiTreeNodeFlags_DefaultOpen)
 		{
@@ -153,7 +160,7 @@ namespace vbt
 			if (ImGui::Checkbox("Show Interpolated UV Coords", &(currentSettings.showInterpTex))) currentSettings.updateSettings = true;
 			if (currentSettings.pipeline == VB_TESSELLATION) if(ImGui::Checkbox("Show Tess Coords Buffer", &(currentSettings.showTessBuff))) currentSettings.updateSettings = true;
 			if (ImGui::Checkbox("Wireframe", &(currentSettings.wireframe))) currentSettings.updateSettings = true;
-			if (currentSettings.pipeline == VB_TESSELLATION) if(ImGui::SliderInt("Tess Factor", &(currentSettings.tessellationFactor), 2, 16)) currentSettings.updateSettings = true;
+			if (currentSettings.pipeline == VB_TESSELLATION) if(ImGui::SliderInt("Tess Factor", &(currentSettings.tessellationFactor), 2, 64)) currentSettings.updateSettings = true;
 		}
 		ImGui::End();
 		ImGui::Render();

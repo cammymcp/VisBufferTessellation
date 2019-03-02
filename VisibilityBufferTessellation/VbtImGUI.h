@@ -23,7 +23,7 @@ namespace vbt
 		glm::vec3 cameraPos;
 		glm::vec3 cameraRot;
 		PipelineType pipeline;
-		int tessellationFactor = 10;
+		int tessellationFactor = 34;
 		bool showVisBuff = false;
 		bool showTessBuff = false;
 		bool showInterpTex = false;
@@ -35,7 +35,7 @@ namespace vbt
 	class ImGUI
 	{
 	public:
-		void Init(VulkanApplication* app, GLFWwindow* window, ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool);
+		void Init(VulkanApplication* app, GLFWwindow* window, ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool, int visBuffTriCount, int tessTriCount);
 		void Recreate(ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool);
 		void CreateVulkanResources();
 		void Update(float frameTime, glm::vec3 cameraPos, glm::vec3 cameraRot);
@@ -51,6 +51,7 @@ namespace vbt
 		VulkanApplication* appHandle;
 		std::array<float, 50> frameTimes{};
 		float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
+		int visBuffTriCount = 0, tessTricount = 0;
 	};
 }
 

@@ -50,6 +50,7 @@ layout(set = 0, binding = 5) uniform SettingsUniformBufferObject
 	uint showInterpolatedTexCoords;
 	uint wireframe;
 } settings;
+layout(set = 0, binding = 6) uniform sampler2D heightmap;
 
 // Interpolate 2D attributes using the partial derivatives and generates dx and dy for texture sampling.
 vec2 Interpolate2DAttributes(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 d)
@@ -119,7 +120,12 @@ void main()
 		// Load position data of the 3 vertices
 		vec3 vert0Pos = vertices[0].posXYZnormX.xyz;
 		vec3 vert1Pos = vertices[1].posXYZnormX.xyz;
-		vec3 vert2Pos = vertices[2].posXYZnormX.xyz;
+		vec3 vert2Pos = vertices[2].posXYZnormX.xyz;		
+
+		// Now displace each vertex by heightmap
+		vert0Pos.y += textureLod(heightmap, vertices[0].normYZtexXY.zw / 5.0, 0.0).r * 8;
+		vert1Pos.y += textureLod(heightmap, vertices[1].normYZtexXY.zw / 5.0, 0.0).r * 8;
+		vert2Pos.y += textureLod(heightmap, vertices[2].normYZtexXY.zw / 5.0, 0.0).r * 8;
 
 		// Transform positions to clip space
 		vec4 clipPos0 = ubo.mvp * vec4(vert0Pos, 1);
