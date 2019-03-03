@@ -98,12 +98,9 @@ namespace vbt
 
 #pragma region Graphics Pipeline Functions
 		void CreatePipelineCache();
+		void CreatePipelineLayouts();
 		void CreateShadePipelines();
 		void CreateWritePipelines();
-		void CreateVisBuffShadePipelineLayout();
-		void CreateVisBuffWritePipelineLayout();
-		void CreateTessShadePipelineLayout();
-		void CreateTessWritePipelineLayout();
 		void CreateRenderPasses();
 		VkShaderModule CreateShaderModule(const std::vector<char>& code);
 #pragma endregion

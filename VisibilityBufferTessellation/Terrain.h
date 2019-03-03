@@ -2,11 +2,11 @@
 #define TERRAINPATCH_H
 
 #include "Mesh.h"
-#include "Heightmap.h"
+#include "Texture.h"
 #include "Buffer.h"
 #include "glm\glm.hpp"
 
-const std::string TEXTURE_PATH = "textures/grid.png";
+const std::string TEXTURE_PATH = "textures/rock.jpg";
 const std::string HEIGHTMAP_PATH = "textures/heightmap.png";
 
 namespace vbt

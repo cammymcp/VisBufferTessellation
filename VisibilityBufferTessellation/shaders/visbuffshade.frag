@@ -123,9 +123,9 @@ void main()
 		vec3 vert2Pos = vertices[2].posXYZnormX.xyz;		
 
 		// Now displace each vertex by heightmap
-		vert0Pos.y += textureLod(heightmap, vertices[0].normYZtexXY.zw / 5.0, 0.0).r * 8;
-		vert1Pos.y += textureLod(heightmap, vertices[1].normYZtexXY.zw / 5.0, 0.0).r * 8;
-		vert2Pos.y += textureLod(heightmap, vertices[2].normYZtexXY.zw / 5.0, 0.0).r * 8;
+		vert0Pos.y += textureLod(heightmap, vertices[0].normYZtexXY.zw / 8.0, 0.0).r * 8;
+		vert1Pos.y += textureLod(heightmap, vertices[1].normYZtexXY.zw / 8.0, 0.0).r * 8;
+		vert2Pos.y += textureLod(heightmap, vertices[2].normYZtexXY.zw / 8.0, 0.0).r * 8;
 
 		// Transform positions to clip space
 		vec4 clipPos0 = ubo.mvp * vec4(vert0Pos, 1);
@@ -170,6 +170,6 @@ void main()
 	}
 	else
 	{
-		outColour = vec4(0.35f, 0.45f, 0.2f, 1.0f);
+		outColour = vec4(0.35f, 0.55f, 0.7f, 1.0f);
 	}
 }

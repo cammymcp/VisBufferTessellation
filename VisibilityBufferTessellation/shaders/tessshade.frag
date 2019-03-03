@@ -132,8 +132,8 @@ Vertex[3] EvaluateTessellatedPrimitive(Vertex[3] patchControlPoints, uvec4 tessC
 
 	// Not bothering with normals until lighting is implemented
 	vertices[0].posXYZnormX.w = 0.0; vertices[0].normYZtexXY.xy = vec2(0.0, 1.0);
-	vertices[1].posXYZnormX.w = 0.0;	vertices[1].normYZtexXY.xy = vec2(0.0, 1.0);
-	vertices[2].posXYZnormX.w = 0.0;	vertices[2].normYZtexXY.xy = vec2(0.0, 1.0);
+	vertices[1].posXYZnormX.w = 0.0; vertices[1].normYZtexXY.xy = vec2(0.0, 1.0);
+	vertices[2].posXYZnormX.w = 0.0; vertices[2].normYZtexXY.xy = vec2(0.0, 1.0);
 
 	// Interpolate UV coordinates
 	vertices[0].normYZtexXY.zw = Interpolate2DLinear(patchControlPoints[0].normYZtexXY.zw, patchControlPoints[1].normYZtexXY.zw, patchControlPoints[2].normYZtexXY.zw, tessCoord0);
@@ -172,9 +172,9 @@ void main()
 		vec3 vertPos2 = primitiveVertices[2].posXYZnormX.xyz;		
 	
 		// Now displace each vertex by heightmap
-		vertPos0.y += textureLod(heightmap, primitiveVertices[0].normYZtexXY.zw / 5.0, 0.0).r * 8;
-		vertPos1.y += textureLod(heightmap, primitiveVertices[1].normYZtexXY.zw / 5.0, 0.0).r * 8;
-		vertPos2.y += textureLod(heightmap, primitiveVertices[2].normYZtexXY.zw / 5.0, 0.0).r * 8;
+		vertPos0.y += textureLod(heightmap, primitiveVertices[0].normYZtexXY.zw / 8.0, 0.0).r * 8;
+		vertPos1.y += textureLod(heightmap, primitiveVertices[1].normYZtexXY.zw / 8.0, 0.0).r * 8;
+		vertPos2.y += textureLod(heightmap, primitiveVertices[2].normYZtexXY.zw / 8.0, 0.0).r * 8;
 
 		// Transform positions to clip space
 		vec4 clipPos0 = ubo.mvp * vec4(vertPos0, 1);
@@ -221,7 +221,7 @@ void main()
 	}
 	else
 	{
-		outColour = vec4(0.65f, 0.35f, 0.2f, 1.0f);
+		outColour = vec4(0.35f, 0.55f, 0.7f, 1.0f);
 	}
 
 }

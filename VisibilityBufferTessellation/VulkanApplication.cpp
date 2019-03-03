@@ -35,6 +35,7 @@ void VulkanApplication::Init()
 	CreateVisBuffWritePassDescriptorSetLayout();
 	CreateTessWritePassDescriptorSetLayout();
 	CreatePipelineCache();
+	CreatePipelineLayouts();
 	CreateWritePipelines();
 	CreateShadePipelines();
 	InitialiseTerrains();
@@ -294,6 +295,7 @@ void VulkanApplication::RecreateSwapChain()
 	vulkan->RecreateSwapchain(window);
 	CreateRenderPasses();
 	CreatePipelineCache();
+	CreatePipelineLayouts();
 	CreateWritePipelines();
 	CreateShadePipelines();
 	CreateFrameBuffers();
@@ -395,9 +397,6 @@ void VulkanApplication::CreateShadePipelines()
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back faces
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
 	rasterizer.depthBiasEnable = VK_FALSE;
-	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-	rasterizer.depthBiasClamp = 0.0f; // Optional
-	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
 
 	// Set up depth test
 	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -432,9 +431,6 @@ void VulkanApplication::CreateShadePipelines()
 	dynamicState.pDynamicStates = dynamicStateEnables.data();
 	dynamicState.dynamicStateCount = SCAST_U32(dynamicStateEnables.size());
 	dynamicState.flags = 0;
-
-	// PipelineLayout
-	CreateVisBuffShadePipelineLayout();
 
 	// We now have everything we need to create the vis buff shade graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
@@ -479,9 +475,6 @@ void VulkanApplication::CreateShadePipelines()
 	fragShaderStageInfo.module = tessFragShaderModule;
 	shaderStages[0] = vertShaderStageInfo;
 	shaderStages[1] = fragShaderStageInfo;
-
-	// PipelineLayout
-	CreateTessShadePipelineLayout();
 
 	// We can now reuse most of the data from the vis buff shade pipeline setup
 	pipelineInfo.pStages = shaderStages;
@@ -556,9 +549,6 @@ void VulkanApplication::CreateWritePipelines()
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back faces
 	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
 	rasterizer.depthBiasEnable = VK_FALSE;
-	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-	rasterizer.depthBiasClamp = 0.0f; // Optional
-	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
 
 	// Set up depth test
 	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -593,9 +583,6 @@ void VulkanApplication::CreateWritePipelines()
 	dynamicState.pDynamicStates = dynamicStateEnables.data();
 	dynamicState.dynamicStateCount = SCAST_U32(dynamicStateEnables.size());
 	dynamicState.flags = 0;
-
-	// PipelineLayout
-	CreateVisBuffWritePipelineLayout();
 
 	// We now have everything we need to create the vis buff write graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
@@ -678,9 +665,6 @@ void VulkanApplication::CreateWritePipelines()
 	colourBlending.attachmentCount = SCAST_U32(tessBlendAttachments.size());
 	colourBlending.pAttachments = tessBlendAttachments.data();
 
-	// PipelineLayout
-	CreateTessWritePipelineLayout();
-
 	// We now have everything we need to create the tess write graphics pipeline
 	pipelineInfo.layout = tessWritePipelineLayout;
 	pipelineInfo.renderPass = tessRenderPass;
@@ -700,75 +684,41 @@ void VulkanApplication::CreateWritePipelines()
 	vkDestroyShaderModule(vulkan->Device(), tessFragShaderModule, nullptr);
 }
 
-void VulkanApplication::CreateVisBuffShadePipelineLayout()
+void VulkanApplication::CreatePipelineLayouts()
 {
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &visBuffShadePassDescSetLayout;
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.flags = 0;
-
-	// Vis Buff Shade Layout
-	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &visBuffShadePipelineLayout) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create vis buff shade pipeline layout");
-	}
-}
-
-void VulkanApplication::CreateVisBuffWritePipelineLayout()
-{
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &visBuffWritePassDescSetLayout; 
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.flags = 0;
-
 	// Vis Buff write layout
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &visBuffWritePassDescSetLayout;
+	pipelineLayoutInfo.pushConstantRangeCount = 0;
+	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+	pipelineLayoutInfo.pNext = nullptr;
+	pipelineLayoutInfo.flags = 0;
 	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &visBuffWritePipelineLayout) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create geometry pipeline layout");
 	}
-}
 
-void VulkanApplication::CreateTessShadePipelineLayout()
-{
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &tessShadePassDescSetLayout;
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.flags = 0;
-
-	// Tess Shade Layout
-	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &tessShadePipelineLayout) != VK_SUCCESS)
+	// Vis Buff Shade Layout
+	pipelineLayoutInfo.pSetLayouts = &visBuffShadePassDescSetLayout;
+	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &visBuffShadePipelineLayout) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create vis buff tess shade pipeline layout");
+		throw std::runtime_error("Failed to create vis buff shade pipeline layout");
 	}
-}
-
-void VulkanApplication::CreateTessWritePipelineLayout()
-{
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &tessWritePassDescSetLayout;
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.flags = 0;
 
 	// Tess write layout
+	pipelineLayoutInfo.pSetLayouts = &tessWritePassDescSetLayout;
 	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &tessWritePipelineLayout) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create vis buff tess write pipeline layout");
+	}
+
+	// Tess Shade Layout
+	pipelineLayoutInfo.pSetLayouts = &tessShadePassDescSetLayout;
+	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &tessShadePipelineLayout) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create vis buff tess shade pipeline layout");
 	}
 }
 
@@ -925,7 +875,7 @@ void VulkanApplication::CreateRenderPasses()
 	// Subpass Description
 	tessSubpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // Specify that this is a graphics subpass, not compute
 	tessSubpassDescriptions[0].colorAttachmentCount = SCAST_U32(tessWriteColorReferences.size());;
-	tessSubpassDescriptions[0].pColorAttachments = tessWriteColorReferences.data(); // Important: The attachment's index in this array is what is referenced in the out variable of the shader!
+	tessSubpassDescriptions[0].pColorAttachments = tessWriteColorReferences.data(); 
 	tessSubpassDescriptions[0].pDepthStencilAttachment = &tessDepthReference;
 
 	// Second Subpass: Tessellation Shade Pass
@@ -1024,7 +974,7 @@ void VulkanApplication::CreateFrameBuffers()
 	VkFramebufferCreateInfo tessFramebufferInfo = {};
 	tessFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	tessFramebufferInfo.pNext = NULL;
-	tessFramebufferInfo.renderPass = tessRenderPass; // Tell frame buffer which render pass it should be compatible with
+	tessFramebufferInfo.renderPass = tessRenderPass; 
 	tessFramebufferInfo.attachmentCount = SCAST_U32(tessAttachments.size());
 	tessFramebufferInfo.pAttachments = tessAttachments.data();
 	tessFramebufferInfo.width = vulkan->Swapchain().Extent().width;
@@ -1151,7 +1101,7 @@ void VulkanApplication::CreateCommandPool()
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Optional. Allows command buffers to be reworked at runtime
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Allows command buffers to be reworked at runtime
 
 	if (vkCreateCommandPool(vulkan->Device(), &poolInfo, nullptr, &commandPool) != VK_SUCCESS)
 	{
@@ -1194,7 +1144,6 @@ void VulkanApplication::RecordCommandBuffers()
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-		beginInfo.pInheritanceInfo = nullptr; // Optional
 
 		if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS)
 		{

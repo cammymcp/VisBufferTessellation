@@ -167,7 +167,6 @@
     <ClCompile Include="..\..\Libraries\imgui-master\imgui_widgets.cpp" />
     <ClCompile Include="Buffer.cpp" />
     <ClCompile Include="Camera.cpp" />
-    <ClCompile Include="Heightmap.cpp" />
     <ClCompile Include="Image.cpp" />
     <ClCompile Include="VbtImGUI.cpp" />
     <ClCompile Include="main.cpp" />
@@ -190,7 +189,6 @@
     <ClInclude Include="..\..\Libraries\imgui-master\imstb_truetype.h" />
     <ClInclude Include="Buffer.h" />
     <ClInclude Include="Camera.h" />
-    <ClInclude Include="Heightmap.h" />
     <ClInclude Include="VbtImGUI.h" />
     <ClInclude Include="VbtUtils.h" />
     <ClInclude Include="Image.h" />

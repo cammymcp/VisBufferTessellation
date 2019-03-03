@@ -35,7 +35,7 @@ void main()
 
 	// Displace height
 	vec2 tex = interpolate2D(inTexCoords[0], inTexCoords[1], inTexCoords[2]);
-	pos.y += textureLod(heightmap, tex / 5.0, 0.0).r * 8;
+	pos.y += textureLod(heightmap, tex / 8.0, 0.0).r * 8;
 
 	// Perspective projection
 	gl_Position = ubo.mvp * vec4(pos, 1.0);
