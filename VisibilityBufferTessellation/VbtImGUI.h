@@ -22,6 +22,9 @@ namespace vbt
 	{
 		glm::vec3 cameraPos;
 		glm::vec3 cameraRot;
+		glm::vec3 lightDirection;
+		glm::vec4 lightDiffuse;
+		glm::vec4 lightAmbient;
 		PipelineType pipeline;
 		int tessellationFactor = 34;
 		bool showVisBuff = false;
@@ -38,7 +41,7 @@ namespace vbt
 		void Init(VulkanApplication* app, GLFWwindow* window, ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool, int visBuffTriCount, int tessTriCount);
 		void Recreate(ImGui_ImplVulkan_InitInfo* info, VkRenderPass renderPass, VkCommandPool commandPool);
 		void CreateVulkanResources();
-		void Update(float frameTime, glm::vec3 cameraPos, glm::vec3 cameraRot);
+		void Update(float frameTime, glm::vec3 cameraPos, glm::vec3 cameraRot, glm::vec3 lightDirection, glm::vec4 lightDiffuse, glm::vec4 lightAmbient);
 		void DrawFrame(VkCommandBuffer commandBuffer);
 		void CleanUp();
 

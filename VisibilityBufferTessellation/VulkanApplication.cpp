@@ -29,6 +29,7 @@ void VulkanApplication::Init()
 	vulkan->Init(window);
 	InitCamera();
 	CreateVmaAllocator();
+	InitLight();
 	CreateCommandPool();
 	CreateRenderPasses();
 	CreateShadePassDescriptorSetLayouts();
@@ -56,7 +57,7 @@ void VulkanApplication::Update()
 	{
 		glfwPollEvents();
 		UpdateMouse();
-		imGui.Update(frameTime, camera.Position(), camera.Rotation());
+		imGui.Update(frameTime, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient());
 		
 		// Draw frame and calculate frame time
 		auto frameStart = std::chrono::high_resolution_clock::now();
@@ -74,7 +75,7 @@ void VulkanApplication::Update()
 
 void VulkanApplication::CleanUp()
 {
-	CleanUpSwapChainResources();
+	CleanUpSwapChainResources(); 
 
 	// Destroy Descriptor Pool
 	vkDestroyDescriptorPool(vulkan->Device(), descriptorPool, nullptr);
@@ -86,6 +87,7 @@ void VulkanApplication::CleanUp()
 	vkDestroyDescriptorSetLayout(vulkan->Device(), tessShadePassDescSetLayout, nullptr);
 
 	// Destroy uniform buffers
+	light.CleanUp(allocator);
 	mvpUniformBuffer.CleanUp(allocator);
 	settingsBuffer.CleanUp(allocator);
 
@@ -125,7 +127,7 @@ void VulkanApplication::InitImGui(VkRenderPass renderPass)
 	initInfo.Allocator = nullptr;
 	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
 	imGui.Init(this, window, &initInfo, renderPass, commandPool, visBuffTerrainTriCount, tessTerrainTriCount);
-	imGui.Update(0.0f, camera.Position(), camera.Rotation()); // Update imgui frame once to populate buffers
+	imGui.Update(0.0f, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient()); // Update imgui frame once to populate buffers
 }
 
 void VulkanApplication::RecreateImGui(VkRenderPass renderPass)
@@ -140,7 +142,7 @@ void VulkanApplication::RecreateImGui(VkRenderPass renderPass)
 	initInfo.Allocator = nullptr;
 	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
 	imGui.Recreate(&initInfo, renderPass, commandPool);
-	imGui.Update(0.0f, camera.Position(), camera.Rotation());
+	imGui.Update(0.0f, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient());
 }
 
 void VulkanApplication::ApplySettings(AppSettings settings)
@@ -148,6 +150,11 @@ void VulkanApplication::ApplySettings(AppSettings settings)
 	// Camera
 	camera.SetPosition(settings.cameraPos);
 	camera.SetRotation(settings.cameraRot);
+
+	// Light
+	light.SetDiffuse(settings.lightDiffuse);
+	light.SetDirection(glm::vec4(settings.lightDirection, 1.0f));
+	light.SetAmbient(settings.lightAmbient);
 
 	// Render settings
 	renderSettingsUbo.tessellationFactor = settings.tessellationFactor;
@@ -940,6 +947,16 @@ void VulkanApplication::InitCamera()
 	camera.SetPosition(glm::vec3(-2.0f, -6.0f, -1.5f), true);
 }
 
+void VulkanApplication::InitLight()
+{
+	DirectionalLight::InitInfo lightInfo = {};
+	lightInfo.direction = glm::vec4(-0.8944f, -0.4472f, 0.0f, 1.0f);
+	lightInfo.diffuse = glm::vec4(0.818f, 0.713f, 0.556f, 1.0f);
+	lightInfo.ambient = glm::vec4(0.4f, 0.3f, 0.3f, 1.0f);
+
+	light.Init(lightInfo, allocator);
+}
+
 void VulkanApplication::CreateFrameBuffers()
 {
 	// Create Visibility Buffer frame buffers
@@ -1335,6 +1352,9 @@ void VulkanApplication::UpdateUniformBuffers()
 
 	// Map rendering settings to ubo
 	settingsBuffer.MapData(&renderSettingsUbo, allocator);
+
+	// Update light ubo
+	light.UpdateUBO(allocator);
 }
 
 void VulkanApplication::CreateVmaAllocator()
@@ -1351,7 +1371,7 @@ void VulkanApplication::CreateDescriptorPool()
 {
 	std::array<VkDescriptorPoolSize, 4> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 4) + 3; // mvp UBO per swapchain image plus mvp ubo for the write pass plus mvp ubo and tessfactor for tess write pass
+	poolSizes[0].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 6) + 3; // mvp UBO, light UBO and settings UBO per swapchain image plus mvp ubo for the write pass plus mvp ubo and settings for tess write pass
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	poolSizes[1].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 6) + 2; // terrain texture and heightmap and normalmap per swapchain image per pipeline plus two for the write pipelines
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1430,15 +1450,22 @@ void VulkanApplication::CreateShadePassDescriptorSetLayouts()
 	normalmapLayoutBinding.descriptorCount = 1;
 	normalmapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	// Binding 8: TessCoords Buffer (Tessellation pipeline only)
+	// Binding 8: Directional light UBO
+	VkDescriptorSetLayoutBinding lightUboBinding = {};
+	lightUboBinding.binding = 8;
+	lightUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	lightUboBinding.descriptorCount = 1;
+	lightUboBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	// Binding 9: TessCoords Buffer (Tessellation pipeline only)
 	VkDescriptorSetLayoutBinding tessBufferBinding = {};
-	tessBufferBinding.binding = 8;
+	tessBufferBinding.binding = 9;
 	tessBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 	tessBufferBinding.descriptorCount = 1;
 	tessBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	// Create descriptor set layout for Visibility Buffer Pipeline
-	std::array<VkDescriptorSetLayoutBinding, 8> visBuffBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding, normalmapLayoutBinding };
+	std::array<VkDescriptorSetLayoutBinding, 9> visBuffBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding, normalmapLayoutBinding, lightUboBinding };
 	VkDescriptorSetLayoutCreateInfo visBuffLayoutInfo = {};
 	visBuffLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	visBuffLayoutInfo.bindingCount = SCAST_U32(visBuffBindings.size());
@@ -1449,7 +1476,7 @@ void VulkanApplication::CreateShadePassDescriptorSetLayouts()
 	}
 
 	// Create descriptor set layout for Tessellation Pipeline
-	std::array<VkDescriptorSetLayoutBinding, 9> tessBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding, normalmapLayoutBinding, tessBufferBinding };
+	std::array<VkDescriptorSetLayoutBinding, 10> tessBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding, normalmapLayoutBinding, lightUboBinding, tessBufferBinding };
 	VkDescriptorSetLayoutCreateInfo tessLayoutInfo = {};
 	tessLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	tessLayoutInfo.bindingCount = SCAST_U32(tessBindings.size());
@@ -1582,8 +1609,11 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		// Normalmap texture
 		visBuffTerrain.SetupNormalmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffShadePassDescSets[i], 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
+		// Directional light ubo
+		light.SetupUBODescriptors(visBuffShadePassDescSets[i], 8, 1);
+
 		// Create a descriptor writes for each descriptor in the set
-		std::array<VkWriteDescriptorSet, 8> visBuffShadePassDescriptorWrites = {};
+		std::array<VkWriteDescriptorSet, 9> visBuffShadePassDescriptorWrites = {};
 		visBuffShadePassDescriptorWrites[0] = visBuffTerrain.GetTexture().WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[1] = visibilityBuffer.visibility.WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
@@ -1592,6 +1622,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		visBuffShadePassDescriptorWrites[5] = settingsBuffer.WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[6] = visBuffTerrain.Heightmap().WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[7] = visBuffTerrain.Normalmap().WriteDescriptorSet();
+		visBuffShadePassDescriptorWrites[8] = light.UBO().WriteDescriptorSet();
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(visBuffShadePassDescriptorWrites.size()), visBuffShadePassDescriptorWrites.data(), 0, nullptr);
 
 		// Now for the tessellation pipeline
@@ -1602,13 +1633,14 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		settingsBuffer.SetupDescriptorWriteSet(tessShadePassDescSets[i], 5, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 		visBuffTerrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessShadePassDescSets[i], 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 		visBuffTerrain.SetupNormalmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessShadePassDescSets[i], 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+		light.SetupUBODescriptors(tessShadePassDescSets[i], 8, 1);
 		// Tess Visibility Buffer attachment
 		tessVisibilityBuffer.visibility.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_NULL_HANDLE);
 		tessVisibilityBuffer.visibility.SetupDescriptorWriteSet(tessShadePassDescSets[i], 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
 		tessVisibilityBuffer.tessCoords.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_NULL_HANDLE);
-		tessVisibilityBuffer.tessCoords.SetupDescriptorWriteSet(tessShadePassDescSets[i], 8, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
+		tessVisibilityBuffer.tessCoords.SetupDescriptorWriteSet(tessShadePassDescSets[i], 9, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
 
-		std::array<VkWriteDescriptorSet, 9> tessShadePassDescriptorWrites = {};
+		std::array<VkWriteDescriptorSet, 10> tessShadePassDescriptorWrites = {};
 		tessShadePassDescriptorWrites[0] = tessTerrain.GetTexture().WriteDescriptorSet();
 		tessShadePassDescriptorWrites[1] = tessVisibilityBuffer.visibility.WriteDescriptorSet();
 		tessShadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
@@ -1617,7 +1649,8 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		tessShadePassDescriptorWrites[5] = settingsBuffer.WriteDescriptorSet();
 		tessShadePassDescriptorWrites[6] = visBuffTerrain.Heightmap().WriteDescriptorSet();
 		tessShadePassDescriptorWrites[7] = visBuffTerrain.Normalmap().WriteDescriptorSet();
-		tessShadePassDescriptorWrites[8] = tessVisibilityBuffer.tessCoords.WriteDescriptorSet();
+		tessShadePassDescriptorWrites[8] = light.UBO().WriteDescriptorSet();
+		tessShadePassDescriptorWrites[9] = tessVisibilityBuffer.tessCoords.WriteDescriptorSet();
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(tessShadePassDescriptorWrites.size()), tessShadePassDescriptorWrites.data(), 0, nullptr);
 	}
 }

@@ -54,6 +54,12 @@ layout(set = 0, binding = 5) uniform SettingsUniformBufferObject
 } settings;
 layout(set = 0, binding = 6) uniform sampler2D heightmap;
 layout(set = 0, binding = 7) uniform sampler2D normalmap;
+layout(set = 0, binding = 8) uniform DirectionalLightUniformBufferObject
+{
+	vec4 direction;
+	vec4 ambient;
+	vec4 diffuse;
+} light;
 
 // Interpolate 2D attributes using the partial derivatives and generates dx and dy for texture sampling.
 vec2 Interpolate2DAttributes(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 d)
@@ -186,8 +192,14 @@ void main()
 		// Get fragment colour from texture
 		vec4 textureDiffuseColour = texture(textureSampler, interpTexCoords);
 
+		// Calculate directional light colour contribution
+		vec4 lightColour = light.ambient;
+		float lightIntensity = clamp(dot(-interpNorm, light.direction.xyz), 0.0f, 1.0f);
+		lightColour += light.diffuse * lightIntensity;
+		lightColour = clamp(lightColour, 0.0f, 1.0f);
+
 		// Final Fragment colour
-		outColour = textureDiffuseColour;
+		outColour =  clamp(textureDiffuseColour * lightColour, 0.0f, 1.0f);
 
 		// Draw visibility buffer instead if setting is used.
 		if (settings.showVisibilityBuffer == 1)

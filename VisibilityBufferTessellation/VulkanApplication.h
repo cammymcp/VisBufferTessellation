@@ -11,6 +11,7 @@
 #include "Texture.h"
 #include "Camera.h"
 #include "VbtImGUI.h"
+#include "DirectionalLight.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // Ensure that GLM works in Vulkan's clip coordinates of 0.0 to 1.0
@@ -107,6 +108,7 @@ namespace vbt
 
 #pragma region Drawing Functions
 		void InitCamera();
+		void InitLight();
 		void CreateFrameBuffers();
 		void CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, Image* attachment, VmaAllocator& allocator);
 		void DrawFrame();
@@ -149,6 +151,7 @@ namespace vbt
 		VulkanCore* vulkan;
 		ImGUI imGui;
 		Camera camera;
+		DirectionalLight light;
 		VkPipelineCache pipelineCache;
 		VkCommandPool commandPool;
 		VkDescriptorPool descriptorPool;

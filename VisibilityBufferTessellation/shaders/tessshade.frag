@@ -31,7 +31,7 @@ layout(location = 0) out vec4 outColour;
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
 layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
-layout (input_attachment_index = 1, set = 0, binding = 8) uniform usubpassInput inputTessCoords;
+layout (input_attachment_index = 1, set = 0, binding = 9) uniform usubpassInput inputTessCoords;
 layout(set = 0, binding = 2) uniform MVPUniformBufferObject 
 {
     mat4 mvp;
@@ -55,6 +55,12 @@ layout(set = 0, binding = 5) uniform SettingsUniformBufferObject
 } settings;
 layout(set = 0, binding = 6) uniform sampler2D heightmap;
 layout(set = 0, binding = 7) uniform sampler2D normalmap;
+layout(set = 0, binding = 8) uniform DirectionalLightUniformBufferObject
+{
+	vec4 direction;
+	vec4 ambient;
+	vec4 diffuse;
+} light;
 
 vec2 Interpolate2DLinear(vec2 v0, vec2 v1, vec2 v2, vec3 tessCoord)
 {
@@ -235,8 +241,14 @@ void main()
 		// Get fragment colour from texture
 		vec4 textureDiffuseColour = texture(textureSampler, interpTexCoords);
 
+		// Calculate directional light colour contribution
+		vec4 lightColour = light.ambient;
+		float lightIntensity = clamp(dot(-interpNorm, light.direction.xyz), 0.0f, 1.0f);
+		lightColour += light.diffuse * lightIntensity;
+		lightColour = clamp(lightColour, 0.0f, 1.0f);
+
 		// Final Fragment colour
-		outColour = textureDiffuseColour;
+		outColour =  clamp(textureDiffuseColour * lightColour, 0.0f, 1.0f);
 
 		// Draw visibility buffer images instead if settings are used.
 		if (settings.showVisibilityBuffer == 1)

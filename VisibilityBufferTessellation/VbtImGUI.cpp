@@ -74,7 +74,7 @@ namespace vbt
 	}
 	
 	// Define UI elements to display
-	void ImGUI::Update(float frameTime, glm::vec3 cameraPos, glm::vec3 cameraRot)
+	void ImGUI::Update(float frameTime, glm::vec3 cameraPos, glm::vec3 cameraRot, glm::vec3 lightDirection, glm::vec4 lightDiffuse, glm::vec4 lightAmbient)
 	{
 		// Store local app settings
 		static AppSettings currentSettings;
@@ -82,6 +82,9 @@ namespace vbt
 		currentSettings.cameraRot.x = WrapAngle(cameraRot.x);
 		currentSettings.cameraRot.y = WrapAngle(cameraRot.y);
 		currentSettings.cameraRot.z = WrapAngle(cameraRot.z);
+		currentSettings.lightDiffuse = lightDiffuse;
+		currentSettings.lightDirection = lightDirection;
+		currentSettings.lightAmbient = lightAmbient;
 
 		// Calculate tessellation tri-count at current tess factor
 		int tessCount = tessTricount * CalculateTriangleSubdivision(currentSettings.tessellationFactor);
@@ -105,18 +108,7 @@ namespace vbt
 		int ret = snprintf(frameTimeChar, sizeof frameTimeChar, "%.2f", frameTime);
 
 		ImGui::Begin("Menu");
-		if (ImGui::CollapsingHeader("Measurements"))
-		{
-			ImGui::Text("Frame Times (ms)");
-			ImGui::PlotHistogram("", &frameTimes[0], 50, 0, frameTimeChar, frameTimeMin, frameTimeMax, ImVec2(0, 100));
-			if (ImGui::Button("Reset Frame Times", ImVec2(150, 20)))
-			{
-				ResetFrameGraph();
-			}
-			ImGui::Text("Visibility Buffer Triangle Count: %d", visBuffTriCount);
-			ImGui::Text("Tessellated Triangle Count: %d", tessCount);
-		}
-		if (ImGui::CollapsingHeader("Camera"), ImGuiTreeNodeFlags_DefaultOpen)
+		if (ImGui::CollapsingHeader("Camera"))
 		{
 			ImGui::Text("Position: "); 
 			ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.2f);
@@ -131,6 +123,31 @@ namespace vbt
 			ImGui::SameLine(); if (ImGui::InputFloat("y##rot", &(currentSettings.cameraRot.y), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
 			ImGui::SameLine(); if (ImGui::InputFloat("z##rot", &(currentSettings.cameraRot.z), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
 			ImGui::PopItemWidth();
+		}
+		if (ImGui::CollapsingHeader("Light"))
+		{
+			ImGui::Text("Direction: ");
+			ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.2f);
+			ImGui::SameLine(); if (ImGui::InputFloat("x##dir", &(currentSettings.lightDirection.x), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("y##dir", &(currentSettings.lightDirection.y), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
+			ImGui::SameLine(); if (ImGui::InputFloat("z##dir", &(currentSettings.lightDirection.z), 0.0f, 0.0f, "%.1f", ImGuiInputTextFlags_EnterReturnsTrue)) currentSettings.updateSettings = true;
+			ImGui::PopItemWidth();
+			ImGui::Separator();
+			ImGui::Text("Diffuse Colour: ");
+			if (ImGui::ColorPicker4("##picker", (float*)&(currentSettings.lightDiffuse), ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview)) currentSettings.updateSettings = true;
+			ImGui::SameLine();
+			ImGui::BeginGroup(); // Lock X position
+			ImGui::Text("Current");
+			ImGui::ColorButton("##current", ImVec4(currentSettings.lightDiffuse.x, currentSettings.lightDiffuse.y, currentSettings.lightDiffuse.z, currentSettings.lightDiffuse.w), ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_AlphaPreviewHalf, ImVec2(60, 40));
+			ImGui::EndGroup();
+			ImGui::Separator();
+			ImGui::Text("Ambient Colour: ");
+			if (ImGui::ColorPicker4("##pickeramb", (float*)&(currentSettings.lightAmbient), ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview)) currentSettings.updateSettings = true;
+			ImGui::SameLine();
+			ImGui::BeginGroup(); // Lock X position
+			ImGui::Text("Current");
+			ImGui::ColorButton("##currentamb", ImVec4(currentSettings.lightAmbient.x, currentSettings.lightAmbient.y, currentSettings.lightAmbient.z, currentSettings.lightAmbient.w), ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_AlphaPreviewHalf, ImVec2(60, 40));
+			ImGui::EndGroup();
 		}
 		if (ImGui::CollapsingHeader("Pipelines"), ImGuiTreeNodeFlags_DefaultOpen)
 		{
@@ -161,6 +178,23 @@ namespace vbt
 			if (currentSettings.pipeline == VB_TESSELLATION) if(ImGui::Checkbox("Show Tess Coords Buffer", &(currentSettings.showTessBuff))) currentSettings.updateSettings = true;
 			if (ImGui::Checkbox("Wireframe", &(currentSettings.wireframe))) currentSettings.updateSettings = true;
 			if (currentSettings.pipeline == VB_TESSELLATION) if(ImGui::SliderInt("Tess Factor", &(currentSettings.tessellationFactor), 2, 64)) currentSettings.updateSettings = true;
+		}
+		ImGui::End();
+
+		ImGui::Begin("Statistics");
+		if (ImGui::CollapsingHeader("Pass Times"), ImGuiTreeNodeFlags_DefaultOpen)
+		{
+			ImGui::Text("Frame Times (ms)");
+			ImGui::PlotHistogram("", &frameTimes[0], 50, 0, frameTimeChar, frameTimeMin, frameTimeMax, ImVec2(0, 100));
+			if (ImGui::Button("Reset Frame Times", ImVec2(150, 20)))
+			{
+				ResetFrameGraph();
+			}
+		}
+		if (ImGui::CollapsingHeader("Triangle Counts"), ImGuiTreeNodeFlags_DefaultOpen)
+		{
+			ImGui::Text("Visibility Buffer Triangle Count: %d", visBuffTriCount);
+			ImGui::Text("Tessellated Triangle Count: %d", tessCount);
 		}
 		ImGui::End();
 		ImGui::Render();
