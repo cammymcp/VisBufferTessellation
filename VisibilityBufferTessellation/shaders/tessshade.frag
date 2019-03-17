@@ -2,8 +2,6 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
-#define PRIMITIVE_ID_BITS 23
-
 // Structs
 struct Vertex
 {
@@ -20,6 +18,10 @@ struct DerivativesOutput
 	vec3 dbDy;
 };
 
+// Constants
+const float heightTexScale = 8.0f;
+const float heightScale = 5.0f;
+
 // In
 layout(location = 0) in vec2 inScreenPos;
 
@@ -29,7 +31,7 @@ layout(location = 0) out vec4 outColour;
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
 layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
-layout (input_attachment_index = 1, set = 0, binding = 7) uniform usubpassInput inputTessCoords;
+layout (input_attachment_index = 1, set = 0, binding = 8) uniform usubpassInput inputTessCoords;
 layout(set = 0, binding = 2) uniform MVPUniformBufferObject 
 {
     mat4 mvp;
@@ -52,6 +54,7 @@ layout(set = 0, binding = 5) uniform SettingsUniformBufferObject
 	uint wireframe;
 } settings;
 layout(set = 0, binding = 6) uniform sampler2D heightmap;
+layout(set = 0, binding = 7) uniform sampler2D normalmap;
 
 vec2 Interpolate2DLinear(vec2 v0, vec2 v1, vec2 v2, vec3 tessCoord)
 {
@@ -74,6 +77,16 @@ vec2 Interpolate2DAttributes(mat3x2 attributes, vec3 dbDx, vec3 dbDy, vec2 d)
 	
 	vec2 result = (attribute_s + d.x * attribute_x + d.y * attribute_y);
 	return result;
+}
+
+// Interpolate vertex attributes at point 'd' using the partial derivatives
+vec3 Interpolate3DAttributes(mat3 attributes, vec3 dbDx, vec3 dbDy, vec2 d)
+{
+	vec3 attribute_x = attributes * dbDx;
+	vec3 attribute_y = attributes * dbDy;
+	vec3 attribute_s = attributes[0];
+	
+	return (attribute_s + d.x * attribute_x + d.y * attribute_y);
 }
 
 // Engel's barycentric coord partial derivs function. Follows equation from [Schied][Dachsbacher]
@@ -172,9 +185,14 @@ void main()
 		vec3 vertPos2 = primitiveVertices[2].posXYZnormX.xyz;		
 	
 		// Now displace each vertex by heightmap
-		vertPos0.y += textureLod(heightmap, primitiveVertices[0].normYZtexXY.zw / 8.0, 0.0).r * 8;
-		vertPos1.y += textureLod(heightmap, primitiveVertices[1].normYZtexXY.zw / 8.0, 0.0).r * 8;
-		vertPos2.y += textureLod(heightmap, primitiveVertices[2].normYZtexXY.zw / 8.0, 0.0).r * 8;
+		vertPos0.y += texture(heightmap, primitiveVertices[0].normYZtexXY.zw / heightTexScale).r * heightScale;
+		vertPos1.y += texture(heightmap, primitiveVertices[1].normYZtexXY.zw / heightTexScale).r * heightScale;
+		vertPos2.y += texture(heightmap, primitiveVertices[2].normYZtexXY.zw / heightTexScale).r * heightScale;
+
+		// Get normals for each Vertex
+		vec3 vert0Norm = texture(normalmap, primitiveVertices[0].normYZtexXY.zw / heightTexScale).rgb;
+		vec3 vert1Norm = texture(normalmap, primitiveVertices[1].normYZtexXY.zw / heightTexScale).rgb;
+		vec3 vert2Norm = texture(normalmap, primitiveVertices[2].normYZtexXY.zw / heightTexScale).rgb;
 
 		// Transform positions to clip space
 		vec4 clipPos0 = ubo.mvp * vec4(vertPos0, 1);
@@ -205,6 +223,15 @@ void main()
 		};
 		vec2 interpTexCoords = Interpolate2DAttributes(triTexCoords, derivatives.dbDx, derivatives.dbDy, delta);
 
+		// Interpolate normal
+		mat3 triNormals =
+		{
+			vert0Norm,
+			vert1Norm,
+			vert2Norm
+		};
+		vec3 interpNorm = Interpolate3DAttributes(triNormals, derivatives.dbDx, derivatives.dbDy, delta);
+
 		// Get fragment colour from texture
 		vec4 textureDiffuseColour = texture(textureSampler, interpTexCoords);
 
@@ -218,6 +245,7 @@ void main()
 			outColour = tessCoordsColour;
 		else if (settings.showInterpolatedTexCoords == 1)
 			outColour = vec4(normalize(abs(interpTexCoords)), 0.0f, 1.0f);
+			//outColour = vec4(interpNorm, 1.0f);
 	}
 	else
 	{

@@ -3,6 +3,10 @@
 #extension GL_ARB_shading_language_420pack : enable
 #extension GL_ARB_shader_draw_parameters : enable
 
+// Constants
+const float heightTexScale = 8.0f;
+const float heightScale = 5.0f;
+
 // Descriptors
 layout(binding = 0) uniform UniformBufferObject 
 {
@@ -27,7 +31,7 @@ void main()
 {
 	// Displace height 
 	vec3 pos = inPosition;
-	pos.y += textureLod(heightmap, inTexCoords / 8.0, 0.0).r * 8;
+	pos.y += texture(heightmap, inTexCoords / heightTexScale).r * heightScale;
 
 	// Screen Position
 	vec4 vertScreenPos = ubo.mvp * vec4(pos, 1.0);

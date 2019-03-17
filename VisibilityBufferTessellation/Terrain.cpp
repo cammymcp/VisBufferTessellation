@@ -8,6 +8,7 @@ namespace vbt
 	{
 		texture.LoadAndCreate(TEXTURE_PATH, allocator, device, physDevice, cmdPool);
 		heightmap.LoadAndCreate(HEIGHTMAP_PATH, allocator, device, physDevice, cmdPool);
+		normalmap.LoadAndCreate(NORMALMAP_PATH, allocator, device, physDevice, cmdPool);
 
 		int triangleCount = Generate(info.subdivisions, info.width, info.uvScale);
 
@@ -28,11 +29,18 @@ namespace vbt
 		heightmap.SetupDescriptorWriteSet(dstSet, binding, type, count);
 	}
 
+	void Terrain::SetupNormalmapDescriptor(VkImageLayout layout, VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
+	{
+		normalmap.SetUpDescriptorInfo(layout);
+		normalmap.SetupDescriptorWriteSet(dstSet, binding, type, count);
+	}
+
 	void Terrain::CleanUp(VmaAllocator& allocator, VkDevice device)
 	{
 		this->Mesh::CleanUp(allocator);
 		texture.CleanUp(allocator, device);
 		heightmap.CleanUp(allocator, device);
+		normalmap.CleanUp(allocator, device);
 	}
 
 	int Terrain::Generate(int verticesPerEdge, int width, float uvScale)

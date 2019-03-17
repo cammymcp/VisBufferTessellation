@@ -3,6 +3,10 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_ARB_shading_language_420pack : enable
 
+// Constants
+const float heightTexScale = 8.0f;
+const float heightScale = 5.0f;
+
 // Descriptors
 layout(binding = 1) uniform UniformBufferObject 
 {
@@ -35,7 +39,7 @@ void main()
 
 	// Displace height
 	vec2 tex = interpolate2D(inTexCoords[0], inTexCoords[1], inTexCoords[2]);
-	pos.y += textureLod(heightmap, tex / 8.0, 0.0).r * 8;
+	pos.y += texture(heightmap, tex / heightTexScale).r * heightScale;
 
 	// Perspective projection
 	gl_Position = ubo.mvp * vec4(pos, 1.0);

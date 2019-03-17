@@ -180,7 +180,7 @@ void VulkanApplication::InitialiseTerrains()
 	Terrain::InitInfo tessTerrainInfo;
 	tessTerrainInfo.subdivisions = 8;
 	tessTerrainInfo.width = 64;
-	tessTerrainInfo.uvScale = 11.35f;
+	tessTerrainInfo.uvScale = 11.39f;
 
 	// Generate terrain geometry
 	visBuffTerrainTriCount = visBuffTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, visBuffTerrainInfo);
@@ -1353,7 +1353,7 @@ void VulkanApplication::CreateDescriptorPool()
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[0].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 4) + 3; // mvp UBO per swapchain image plus mvp ubo for the write pass plus mvp ubo and tessfactor for tess write pass
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 4) + 2; // terrain texture and heightmap per swapchain image per pipeline plus two for the write pipelines
+	poolSizes[1].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 6) + 2; // terrain texture and heightmap and normalmap per swapchain image per pipeline plus two for the write pipelines
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	poolSizes[2].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 2) * 2; // 2 storage buffers per swapchain image per shade pass
 	poolSizes[3].type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
@@ -1423,15 +1423,22 @@ void VulkanApplication::CreateShadePassDescriptorSetLayouts()
 	heightmapLayoutBinding.descriptorCount = 1;
 	heightmapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	// Binding 7: TessCoords Buffer (Tessellation pipeline only)
+	// Binding 7: Normalmap texture sampler
+	VkDescriptorSetLayoutBinding normalmapLayoutBinding = {};
+	normalmapLayoutBinding.binding = 7;
+	normalmapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	normalmapLayoutBinding.descriptorCount = 1;
+	normalmapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	// Binding 8: TessCoords Buffer (Tessellation pipeline only)
 	VkDescriptorSetLayoutBinding tessBufferBinding = {};
-	tessBufferBinding.binding = 7;
+	tessBufferBinding.binding = 8;
 	tessBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 	tessBufferBinding.descriptorCount = 1;
 	tessBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	// Create descriptor set layout for Visibility Buffer Pipeline
-	std::array<VkDescriptorSetLayoutBinding, 7> visBuffBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding };
+	std::array<VkDescriptorSetLayoutBinding, 8> visBuffBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding, normalmapLayoutBinding };
 	VkDescriptorSetLayoutCreateInfo visBuffLayoutInfo = {};
 	visBuffLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	visBuffLayoutInfo.bindingCount = SCAST_U32(visBuffBindings.size());
@@ -1442,7 +1449,7 @@ void VulkanApplication::CreateShadePassDescriptorSetLayouts()
 	}
 
 	// Create descriptor set layout for Tessellation Pipeline
-	std::array<VkDescriptorSetLayoutBinding, 8> tessBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding, tessBufferBinding };
+	std::array<VkDescriptorSetLayoutBinding, 9> tessBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding, normalmapLayoutBinding, tessBufferBinding };
 	VkDescriptorSetLayoutCreateInfo tessLayoutInfo = {};
 	tessLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	tessLayoutInfo.bindingCount = SCAST_U32(tessBindings.size());
@@ -1572,8 +1579,11 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		// Heightmap texture
 		visBuffTerrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffShadePassDescSets[i], 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
+		// Normalmap texture
+		visBuffTerrain.SetupNormalmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffShadePassDescSets[i], 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+
 		// Create a descriptor writes for each descriptor in the set
-		std::array<VkWriteDescriptorSet, 7> visBuffShadePassDescriptorWrites = {};
+		std::array<VkWriteDescriptorSet, 8> visBuffShadePassDescriptorWrites = {};
 		visBuffShadePassDescriptorWrites[0] = visBuffTerrain.GetTexture().WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[1] = visibilityBuffer.visibility.WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
@@ -1581,6 +1591,7 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		visBuffShadePassDescriptorWrites[4] = visBuffTerrain.AttributeBuffer().WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[5] = settingsBuffer.WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[6] = visBuffTerrain.Heightmap().WriteDescriptorSet();
+		visBuffShadePassDescriptorWrites[7] = visBuffTerrain.Normalmap().WriteDescriptorSet();
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(visBuffShadePassDescriptorWrites.size()), visBuffShadePassDescriptorWrites.data(), 0, nullptr);
 
 		// Now for the tessellation pipeline
@@ -1590,13 +1601,14 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		tessTerrain.SetupAttributeBufferDescriptor(tessShadePassDescSets[i], 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
 		settingsBuffer.SetupDescriptorWriteSet(tessShadePassDescSets[i], 5, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 		visBuffTerrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessShadePassDescSets[i], 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+		visBuffTerrain.SetupNormalmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessShadePassDescSets[i], 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 		// Tess Visibility Buffer attachment
 		tessVisibilityBuffer.visibility.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_NULL_HANDLE);
 		tessVisibilityBuffer.visibility.SetupDescriptorWriteSet(tessShadePassDescSets[i], 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
 		tessVisibilityBuffer.tessCoords.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_NULL_HANDLE);
-		tessVisibilityBuffer.tessCoords.SetupDescriptorWriteSet(tessShadePassDescSets[i], 7, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
+		tessVisibilityBuffer.tessCoords.SetupDescriptorWriteSet(tessShadePassDescSets[i], 8, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
 
-		std::array<VkWriteDescriptorSet, 8> tessShadePassDescriptorWrites = {};
+		std::array<VkWriteDescriptorSet, 9> tessShadePassDescriptorWrites = {};
 		tessShadePassDescriptorWrites[0] = tessTerrain.GetTexture().WriteDescriptorSet();
 		tessShadePassDescriptorWrites[1] = tessVisibilityBuffer.visibility.WriteDescriptorSet();
 		tessShadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
@@ -1604,7 +1616,8 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		tessShadePassDescriptorWrites[4] = tessTerrain.AttributeBuffer().WriteDescriptorSet();
 		tessShadePassDescriptorWrites[5] = settingsBuffer.WriteDescriptorSet();
 		tessShadePassDescriptorWrites[6] = visBuffTerrain.Heightmap().WriteDescriptorSet();
-		tessShadePassDescriptorWrites[7] = tessVisibilityBuffer.tessCoords.WriteDescriptorSet();
+		tessShadePassDescriptorWrites[7] = visBuffTerrain.Normalmap().WriteDescriptorSet();
+		tessShadePassDescriptorWrites[8] = tessVisibilityBuffer.tessCoords.WriteDescriptorSet();
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(tessShadePassDescriptorWrites.size()), tessShadePassDescriptorWrites.data(), 0, nullptr);
 	}
 }

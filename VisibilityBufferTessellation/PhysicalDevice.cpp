@@ -58,7 +58,7 @@ namespace vbt
 			swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
 		}
 
-		return indices.isSuitable() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && discrete && supportedFeatures.geometryShader && supportedFeatures.fragmentStoresAndAtomics;
+		return indices.isSuitable() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && discrete && supportedFeatures.geometryShader && supportedFeatures.fragmentStoresAndAtomics && supportedFeatures.tessellationShader;
 	}
 
 	bool PhysicalDevice::CheckDeviceExtensionSupport(VkPhysicalDevice device)
