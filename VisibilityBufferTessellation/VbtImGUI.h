@@ -11,6 +11,8 @@
 #include "imgui_impl_glfw.h"
 #include "PhysicalDevice.h"
 
+#define IMGUI_ENABLED false 
+
 namespace vbt
 {
 	// Forward declarations

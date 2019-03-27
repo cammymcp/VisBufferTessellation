@@ -136,7 +136,7 @@ namespace vbt
 			ImGui::Text("Diffuse Colour: ");
 			if (ImGui::ColorPicker4("##picker", (float*)&(currentSettings.lightDiffuse), ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview)) currentSettings.updateSettings = true;
 			ImGui::SameLine();
-			ImGui::BeginGroup(); // Lock X position
+			ImGui::BeginGroup();
 			ImGui::Text("Current");
 			ImGui::ColorButton("##current", ImVec4(currentSettings.lightDiffuse.x, currentSettings.lightDiffuse.y, currentSettings.lightDiffuse.z, currentSettings.lightDiffuse.w), ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_AlphaPreviewHalf, ImVec2(60, 40));
 			ImGui::EndGroup();
@@ -144,7 +144,7 @@ namespace vbt
 			ImGui::Text("Ambient Colour: ");
 			if (ImGui::ColorPicker4("##pickeramb", (float*)&(currentSettings.lightAmbient), ImGuiColorEditFlags_NoSidePreview | ImGuiColorEditFlags_NoSmallPreview)) currentSettings.updateSettings = true;
 			ImGui::SameLine();
-			ImGui::BeginGroup(); // Lock X position
+			ImGui::BeginGroup();
 			ImGui::Text("Current");
 			ImGui::ColorButton("##currentamb", ImVec4(currentSettings.lightAmbient.x, currentSettings.lightAmbient.y, currentSettings.lightAmbient.z, currentSettings.lightAmbient.w), ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_AlphaPreviewHalf, ImVec2(60, 40));
 			ImGui::EndGroup();
@@ -202,7 +202,9 @@ namespace vbt
 		// Only update the application when a value has been changed
 		if (currentSettings.updateSettings)
 		{
+#if IMGUI_ENABLED
 			appHandle->ApplySettings(currentSettings);
+#endif
 			currentSettings.updateSettings = false;
 		}
 	}

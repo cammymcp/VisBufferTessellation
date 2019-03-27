@@ -46,7 +46,9 @@ void VulkanApplication::Init()
 	CreateShadePassDescriptorSets();
 	CreateWritePassDescriptorSet();
 	CreateTessWritePassDescriptorSet();
+#if IMGUI_ENABLED
 	InitImGui(currentPipeline == VISIBILITYBUFFER ? visBuffRenderPass : tessRenderPass);
+#endif
 	AllocateCommandBuffers();
 	RecordCommandBuffers();
 }
@@ -57,7 +59,9 @@ void VulkanApplication::Update()
 	{
 		glfwPollEvents();
 		UpdateMouse();
+#if IMGUI_ENABLED
 		imGui.Update(frameTime, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient());
+#endif
 		
 		// Draw frame and calculate frame time
 		auto frameStart = std::chrono::high_resolution_clock::now();
@@ -95,8 +99,10 @@ void VulkanApplication::CleanUp()
 	visBuffTerrain.CleanUp(allocator, vulkan->Device());
 	tessTerrain.CleanUp(allocator, vulkan->Device());
 
+#if IMGUI_ENABLED
 	// Destroy ImGui resources
 	imGui.CleanUp();
+#endif
 
 	vmaDestroyAllocator(allocator);
 
@@ -114,6 +120,7 @@ void VulkanApplication::CleanUp()
 }
 #pragma endregion
 
+#if IMGUI_ENABLED
 #pragma region ImGui Functions
 void VulkanApplication::InitImGui(VkRenderPass renderPass)
 {
@@ -166,6 +173,7 @@ void VulkanApplication::ApplySettings(AppSettings settings)
 	// Check for pipeline change
 	if (settings.pipeline != currentPipeline)
 	{
+		// Command buffers are re-recorded every frame, so changing the local current pipeline will automatically bind the new pipeline and renderpass objects for the next frame. 
 		currentPipeline = settings.pipeline;
 
 		// Wait for current operations to be finished
@@ -176,18 +184,19 @@ void VulkanApplication::ApplySettings(AppSettings settings)
 	}
 }
 #pragma endregion
+#endif
 
 #pragma region Geometry Functions
 void VulkanApplication::InitialiseTerrains()
 {
 	Terrain::InitInfo visBuffTerrainInfo;
-	visBuffTerrainInfo.subdivisions = 290; 
+	visBuffTerrainInfo.subdivisions = 542; 
 	visBuffTerrainInfo.width = 64;
 	visBuffTerrainInfo.uvScale = 10.0f;
 	Terrain::InitInfo tessTerrainInfo;
-	tessTerrainInfo.subdivisions = 8;
+	tessTerrainInfo.subdivisions = 14;
 	tessTerrainInfo.width = 64;
-	tessTerrainInfo.uvScale = 11.39f;
+	tessTerrainInfo.uvScale = 10.75f;
 
 	// Generate terrain geometry
 	visBuffTerrainTriCount = visBuffTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, visBuffTerrainInfo);
@@ -1254,8 +1263,10 @@ void VulkanApplication::RecordCommandBuffers()
 		}		
 		// -----------------------------------------
 
+#if IMGUI_ENABLED
 		// Imgui pass
 		imGui.DrawFrame(commandBuffers[i]);
+#endif
 
 		// Now end the render pass
 		vkCmdEndRenderPass(commandBuffers[i]);

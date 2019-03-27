@@ -64,8 +64,10 @@ namespace vbt
 			CleanUp();
 		}
 
-		VulkanCore* GetVulkanCore() { return vulkan; }
+#if IMGUI_ENABLED
 		void ApplySettings(AppSettings settings);
+#endif
+		VulkanCore* GetVulkanCore() { return vulkan; }
 
 		const std::string title = "Visibility Buffer Tessellation";
 	private:
@@ -77,10 +79,12 @@ namespace vbt
 		void CleanUp();
 #pragma endregion
 
+#if IMGUI_ENABLED
 #pragma region ImGui Functions
 		void InitImGui(VkRenderPass renderPass);
 		void RecreateImGui(VkRenderPass renderPass);
 #pragma endregion
+#endif
 
 #pragma region Geometry Functions
 		void InitialiseTerrains();
@@ -149,7 +153,9 @@ namespace vbt
 #pragma region Shared Objects
 		GLFWwindow* window;
 		VulkanCore* vulkan;
+#if IMGUI_ENABLED
 		ImGUI imGui;
+#endif
 		Camera camera;
 		DirectionalLight light;
 		VkPipelineCache pipelineCache;
@@ -197,7 +203,7 @@ namespace vbt
 #pragma endregion
 
 #pragma region Input, Settings, Counters and Flags
-		PipelineType currentPipeline = VISIBILITYBUFFER;
+		PipelineType currentPipeline = VB_TESSELLATION;
 		SettingsUBO renderSettingsUbo;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;
