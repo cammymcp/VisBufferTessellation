@@ -31,6 +31,7 @@ void VulkanApplication::Init()
 	CreateVmaAllocator();
 	InitLight();
 	CreateCommandPool();
+	CreateTimestampPool();
 	CreateRenderPasses();
 	CreateShadePassDescriptorSetLayouts();
 	CreateVisBuffWritePassDescriptorSetLayout();
@@ -60,7 +61,7 @@ void VulkanApplication::Update()
 		glfwPollEvents();
 		UpdateMouse();
 #if IMGUI_ENABLED
-		imGui.Update(frameTime, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient());
+		imGui.Update(frameTime, forwardPassTime, deferredPassTime, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient());
 #endif
 		
 		// Draw frame and calculate frame time
@@ -68,7 +69,9 @@ void VulkanApplication::Update()
 		DrawFrame();
 		auto frameEnd = std::chrono::high_resolution_clock::now();
 		auto diff = std::chrono::duration<double, std::milli>(frameEnd - frameStart).count();
-		frameTime = (float)diff / 1000.0f;
+		frameTime = diff / 1000.0;
+
+		GetTimestampResults();
 
 		camera.Update(frameTime);
 	}
@@ -83,6 +86,9 @@ void VulkanApplication::CleanUp()
 
 	// Destroy Descriptor Pool
 	vkDestroyDescriptorPool(vulkan->Device(), descriptorPool, nullptr);
+
+	// Destroy query pool
+	vkDestroyQueryPool(vulkan->Device(), timestampPool, nullptr);
 
 	// Destroy descriptor layouts
 	vkDestroyDescriptorSetLayout(vulkan->Device(), visBuffShadePassDescSetLayout, nullptr);
@@ -134,7 +140,7 @@ void VulkanApplication::InitImGui(VkRenderPass renderPass)
 	initInfo.Allocator = nullptr;
 	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
 	imGui.Init(this, window, &initInfo, renderPass, commandPool, visBuffTerrainTriCount, tessTerrainTriCount);
-	imGui.Update(0.0f, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient()); // Update imgui frame once to populate buffers
+	imGui.Update(0.0, 0.0, 0.0, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient()); // Update imgui frame once to populate buffers
 }
 
 void VulkanApplication::RecreateImGui(VkRenderPass renderPass)
@@ -149,7 +155,7 @@ void VulkanApplication::RecreateImGui(VkRenderPass renderPass)
 	initInfo.Allocator = nullptr;
 	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
 	imGui.Recreate(&initInfo, renderPass, commandPool);
-	imGui.Update(0.0f, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient());
+	imGui.Update(0.0f, 0.0, 0.0, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient());
 }
 
 void VulkanApplication::ApplySettings(AppSettings settings)
@@ -201,6 +207,39 @@ void VulkanApplication::InitialiseTerrains()
 	// Generate terrain geometry
 	visBuffTerrainTriCount = visBuffTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, visBuffTerrainInfo);
 	tessTerrainTriCount = tessTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, tessTerrainInfo);
+}
+#pragma endregion
+
+#pragma region Testing Functions
+void VulkanApplication::CreateTimestampPool()
+{
+	VkQueryPoolCreateInfo timestampPoolInfo = {};
+	timestampPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+	timestampPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+	timestampPoolInfo.queryCount = 4; // Start of forward, end of forward, start of deferred, end of deferred. 
+	timestampPoolInfo.pNext = NULL;
+	timestampPoolInfo.flags = 0;
+
+	if (vkCreateQueryPool(vulkan->Device(), &timestampPoolInfo, nullptr, &timestampPool) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Query pool creation failed");
+	}
+}
+
+void VulkanApplication::GetTimestampResults()
+{
+	// Requests the results of the timestamp queries made in the current frame
+	std::array<uint64_t, 4> timestamps;
+
+	if (vkGetQueryPoolResults(vulkan->Device(), timestampPool, 0, SCAST_U32(timestamps.size()), SCAST_U32(timestamps.size()) * sizeof(uint64_t), timestamps.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to get timestamp results");
+	}
+	else
+	{
+		forwardPassTime = ((double)timestamps[1] - (double)timestamps[0]) / 1000000.0;
+		deferredPassTime = ((double)timestamps[3] - (double)timestamps[2]) / 1000000.0;
+	}
 }
 #pragma endregion
 
@@ -257,6 +296,16 @@ void VulkanApplication::ProcessKeyInput(GLFWwindow* window, int key, int scancod
 	}
 	if (key == GLFW_KEY_R && action == GLFW_PRESS)
 		vulkanApp->camera.Reset();
+	if (key == GLFW_KEY_T && action == GLFW_PRESS)
+	{
+		// Switch to tessellation pipeline
+		vulkanApp->SwitchPipeline(VB_TESSELLATION);
+	}
+	if (key == GLFW_KEY_V && action == GLFW_PRESS)
+	{
+		// Switch to vis buff pipeline
+		vulkanApp->SwitchPipeline(VISIBILITYBUFFER);
+	}
 }
 
 void VulkanApplication::ProcessMouseInput(GLFWwindow* window, int button, int action, int mods)
@@ -286,6 +335,23 @@ void VulkanApplication::UpdateMouse()
 	if (mouseRightDown)
 	{
 		camera.Rotate(glm::vec3(-deltaY * camera.rotateSpeed, -deltaX * camera.rotateSpeed, 0.0f));
+	}
+}
+
+void VulkanApplication::SwitchPipeline(PipelineType type)
+{
+	if (currentPipeline != type)
+	{
+		// Command buffers are re-recorded every frame, so changing the local current pipeline will automatically bind the new pipeline and renderpass objects for the next frame. 
+		currentPipeline = type;
+
+		// Wait for current operations to be finished
+		vkDeviceWaitIdle(vulkan->Device());
+
+#if IMGUI_ENABLED
+		// Need to reinitialise ImGui to be compatible with new renderpass
+		RecreateImGui(currentPipeline == VISIBILITYBUFFER ? visBuffRenderPass : tessRenderPass);
+#endif
 	}
 }
 #pragma endregion
@@ -1195,7 +1261,9 @@ void VulkanApplication::RecordCommandBuffers()
 			renderPassInfo.clearValueCount = SCAST_U32(tessClearValues.size());
 			renderPassInfo.pClearValues = tessClearValues.data();
 		}
-		
+
+		// Reset timestamp queries
+		vkCmdResetQueryPool(commandBuffers[i], timestampPool, 0, 4);		
 
 		// Begin the render pass
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -1214,6 +1282,10 @@ void VulkanApplication::RecordCommandBuffers()
 
 		// First Subpass: Write to visibility buffer using one of two pipelines
 		// -----------------------------------------
+		// Record start timestamp
+		vkCmdWriteTimestamp(commandBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestampPool, 0);
+
+		// Decide which pipeline to bind
 		switch (currentPipeline)
 		{
 			case VISIBILITYBUFFER:
@@ -1239,11 +1311,19 @@ void VulkanApplication::RecordCommandBuffers()
 				break;
 			}
 		}
+
+		// Record end timestamp
+		vkCmdWriteTimestamp(commandBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestampPool, 1);
 		// -----------------------------------------
 
 		// Second Subpass: Shading Pass using one of two pipelines
 		// -----------------------------------------
 		vkCmdNextSubpass(commandBuffers[i], VK_SUBPASS_CONTENTS_INLINE);
+
+		// Record start timestamp
+		vkCmdWriteTimestamp(commandBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestampPool, 2);
+
+		// Decide which pipeline to bind
 		switch (currentPipeline)
 		{
 			case VISIBILITYBUFFER:
@@ -1260,7 +1340,10 @@ void VulkanApplication::RecordCommandBuffers()
 				vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); // Vertex shader calculates positions of fullscreen triangle based on index, so no need to bind vertex/index buffers to create a fullscreen quad
 				break;
 			}
-		}		
+		}
+
+		// Record end timestamp
+		vkCmdWriteTimestamp(commandBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestampPool, 3);
 		// -----------------------------------------
 
 #if IMGUI_ENABLED

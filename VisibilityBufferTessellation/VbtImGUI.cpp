@@ -74,7 +74,7 @@ namespace vbt
 	}
 	
 	// Define UI elements to display
-	void ImGUI::Update(float frameTime, glm::vec3 cameraPos, glm::vec3 cameraRot, glm::vec3 lightDirection, glm::vec4 lightDiffuse, glm::vec4 lightAmbient)
+	void ImGUI::Update(double frameTime, double forwardTime, double deferredTime, glm::vec3 cameraPos, glm::vec3 cameraRot, glm::vec3 lightDirection, glm::vec4 lightDiffuse, glm::vec4 lightAmbient)
 	{
 		// Store local app settings
 		static AppSettings currentSettings;
@@ -94,10 +94,10 @@ namespace vbt
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		// Update frame time display
+		// Update pass times
 		std::rotate(frameTimes.begin(), frameTimes.begin() + 1, frameTimes.end()); // Moves whole collection down one, moving first term to the back to be overwritten
-		frameTime *= 1000.0f;
-		frameTimes.back() = frameTime;
+		frameTime *= 1000.0;
+		frameTimes.back() = (float)frameTime;
 		if (frameTime < frameTimeMin) {
 			frameTimeMin = frameTime;
 		}
@@ -105,7 +105,29 @@ namespace vbt
 			frameTimeMax = frameTime;
 		}
 		char frameTimeChar[64];
-		int ret = snprintf(frameTimeChar, sizeof frameTimeChar, "%.2f", frameTime);
+		snprintf(frameTimeChar, sizeof frameTimeChar, "%.2f", frameTime);
+
+		std::rotate(forwardTimes.begin(), forwardTimes.begin() + 1, forwardTimes.end());
+		forwardTimes.back() = (float)forwardTime;
+		if (forwardTime < forwardTimeMin) {
+			forwardTimeMin = forwardTime;
+		}
+		if (forwardTime > forwardTimeMax) {
+			forwardTimeMax = forwardTime;
+		}
+		char forwardTimeChar[64];
+		snprintf(forwardTimeChar, sizeof forwardTimeChar, "%.2f", forwardTime);
+
+		std::rotate(deferredTimes.begin(), deferredTimes.begin() + 1, deferredTimes.end());
+		deferredTimes.back() = (float)deferredTime;
+		if (deferredTime < deferredTimeMin) {
+			deferredTimeMin = deferredTime;
+		}
+		if (deferredTime > deferredTimeMax) {
+			deferredTimeMax = deferredTime;
+		}
+		char deferredTimeChar[64];
+		snprintf(deferredTimeChar, sizeof deferredTimeChar, "%.2f", deferredTime);
 
 		ImGui::Begin("Menu");
 		if (ImGui::CollapsingHeader("Camera"))
@@ -186,9 +208,35 @@ namespace vbt
 		{
 			ImGui::Text("Frame Times (ms)");
 			ImGui::PlotHistogram("", &frameTimes[0], 50, 0, frameTimeChar, frameTimeMin, frameTimeMax, ImVec2(0, 100));
-			if (ImGui::Button("Reset Frame Times", ImVec2(150, 20)))
+			ImGui::Separator();
+
+			ImGui::Text("Forward Times (ms)");
+			ImGui::PlotHistogram("", &forwardTimes[0], 50, 0, forwardTimeChar, forwardTimeMin, forwardTimeMax, ImVec2(0, 100));
+			ImGui::Separator();
+
+			ImGui::Text("Deferred Times (ms)");
+			ImGui::PlotHistogram("", &deferredTimes[0], 50, 0, deferredTimeChar, deferredTimeMin, deferredTimeMax, ImVec2(0, 100));
+			ImGui::Separator();
+
+			if (ImGui::Button("Sample Times", ImVec2(150, 20)))
 			{
-				ResetFrameGraph();
+				SampleFrameTimes();
+				SampleForwardTimes();
+				SampleDeferredTimes();
+			}
+			if (frameTimeSample > 0.0f && forwardTimeSample > 0.0f && deferredTimeSample > 0.0f)
+			{
+				ImGui::Text("Averaged Time Sampled (Last 10 frames)");
+				ImGui::Text("Full Frame: %.3f ms", frameTimeSample);
+				ImGui::Text("Forward Pass: %.3f ms", forwardTimeSample);
+				ImGui::Text("Deferred Pass: %.3f ms", deferredTimeSample);
+			}
+
+			ImGui::Separator();
+
+			if (ImGui::Button("Reset Times", ImVec2(150, 20)))
+			{
+				ResetTimeGraphs();
 			}
 		}
 		if (ImGui::CollapsingHeader("Triangle Counts"), ImGuiTreeNodeFlags_DefaultOpen)
@@ -214,11 +262,55 @@ namespace vbt
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 	}
 
-	void ImGUI::ResetFrameGraph()
+	void ImGUI::ResetTimeGraphs()
 	{
 		frameTimes.fill(0.0f);
 		frameTimeMin = 9999.0f;
 		frameTimeMax = 0.0f;
+		forwardTimes.fill(0.0f);
+		forwardTimeMin = 9999.0f;
+		forwardTimeMax = 0.0f;
+		deferredTimes.fill(0.0f);
+		deferredTimeMin = 9999.0f;
+		deferredTimeMax = 0.0f;
+	}
+
+	// Takes last 10 frame times and averages them
+	void ImGUI::SampleFrameTimes()
+	{
+		if (frameTimes[49] != 0.0f)
+		{
+			float sum = 0.0f;
+			for (int i = frameTimes.size() - 1; i > frameTimes.size() - 11; i--)
+			{
+				sum += frameTimes[i];
+			}
+			frameTimeSample = sum / 10;
+		}
+	}
+	void ImGUI::SampleForwardTimes()
+	{
+		if (forwardTimes[49] != 0.0f)
+		{
+			float sum = 0.0f;
+			for (int i = forwardTimes.size() - 1; i > forwardTimes.size() - 11; i--)
+			{
+				sum += forwardTimes[i];
+			}
+			forwardTimeSample = sum / 10;
+		}
+	}
+	void ImGUI::SampleDeferredTimes()
+	{
+		if (deferredTimes[49] != 0.0f)
+		{
+			float sum = 0.0f;
+			for (int i = deferredTimes.size() - 1; i > deferredTimes.size() - 11; i--)
+			{
+				sum += deferredTimes[i];
+			}
+			deferredTimeSample = sum / 10;
+		}
 	}
 
 	void ImGUI::CleanUp()

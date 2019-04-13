@@ -68,6 +68,7 @@ namespace vbt
 		void ApplySettings(AppSettings settings);
 #endif
 		VulkanCore* GetVulkanCore() { return vulkan; }
+		void SwitchPipeline(PipelineType type);
 
 		const std::string title = "Visibility Buffer Tessellation";
 	private:
@@ -88,6 +89,11 @@ namespace vbt
 
 #pragma region Geometry Functions
 		void InitialiseTerrains();
+#pragma endregion
+
+#pragma region Testing Functions
+		void CreateTimestampPool();
+		void GetTimestampResults();
 #pragma endregion
 
 #pragma region Input Functions
@@ -161,6 +167,7 @@ namespace vbt
 		VkPipelineCache pipelineCache;
 		VkCommandPool commandPool;
 		VkDescriptorPool descriptorPool;
+		VkQueryPool timestampPool;
 		VmaAllocator allocator;
 		std::vector<VkCommandBuffer> commandBuffers;
 		vbt::Image depthImage;
@@ -203,11 +210,13 @@ namespace vbt
 #pragma endregion
 
 #pragma region Input, Settings, Counters and Flags
-		PipelineType currentPipeline = VB_TESSELLATION;
+		PipelineType currentPipeline = VISIBILITYBUFFER;
 		SettingsUBO renderSettingsUbo;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;
-		float frameTime = 0.0f;
+		double frameTime = 0.0;
+		double forwardPassTime = 0.0;
+		double deferredPassTime = 0.0;
 		glm::vec2 mousePosition = glm::vec3();
 		bool mouseLeftDown = false;
 		bool mouseRightDown = false;
