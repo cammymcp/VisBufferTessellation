@@ -69,7 +69,7 @@ namespace std
 	};
 }
 
-// 16-byte aligned vertex attributes. 
+// Packed 16-byte aligned vertex attributes for shader binding. 
 struct VertexAttributes
 {
 	glm::vec4 posXYZnormX;

@@ -45,6 +45,7 @@ namespace vbt
 
 		// We only want dedicated graphics cards
 		bool discrete = (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
+		float timestampPeriod = deviceProperties.limits.timestampPeriod;
 
 		// Check for required queue families
 		QueueFamilyIndices indices = FindQueueFamilies(device, surface);
@@ -58,7 +59,7 @@ namespace vbt
 			swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
 		}
 
-		return indices.isSuitable() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && discrete && supportedFeatures.geometryShader && supportedFeatures.fragmentStoresAndAtomics;
+		return indices.isSuitable() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy && discrete && supportedFeatures.geometryShader && supportedFeatures.fragmentStoresAndAtomics && supportedFeatures.tessellationShader;
 	}
 
 	bool PhysicalDevice::CheckDeviceExtensionSupport(VkPhysicalDevice device)

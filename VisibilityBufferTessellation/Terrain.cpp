@@ -3,14 +3,18 @@
 
 namespace vbt
 {
-	void Terrain::Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool, InitInfo info)
+	// Generates terrain mesh, loads textures and returns triangle count. 
+	int Terrain::Init(VmaAllocator& allocator, VkDevice device, PhysicalDevice physDevice, VkCommandPool& cmdPool, InitInfo info)
 	{
 		texture.LoadAndCreate(TEXTURE_PATH, allocator, device, physDevice, cmdPool);
 		heightmap.LoadAndCreate(HEIGHTMAP_PATH, allocator, device, physDevice, cmdPool);
+		normalmap.LoadAndCreate(NORMALMAP_PATH, allocator, device, physDevice, cmdPool);
 
-		Generate(info.verticesPerEdge, info.width, info.uvScale);
+		int triangleCount = Generate(info.subdivisions, info.width, info.uvScale);
 
 		CreateBuffers(allocator, device, physDevice, cmdPool);
+
+		return triangleCount;
 	}
 
 	void Terrain::SetupTextureDescriptor(VkImageLayout layout, VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
@@ -25,14 +29,21 @@ namespace vbt
 		heightmap.SetupDescriptorWriteSet(dstSet, binding, type, count);
 	}
 
+	void Terrain::SetupNormalmapDescriptor(VkImageLayout layout, VkDescriptorSet dstSet, uint32_t binding, VkDescriptorType type, uint32_t count)
+	{
+		normalmap.SetUpDescriptorInfo(layout);
+		normalmap.SetupDescriptorWriteSet(dstSet, binding, type, count);
+	}
+
 	void Terrain::CleanUp(VmaAllocator& allocator, VkDevice device)
 	{
 		this->Mesh::CleanUp(allocator);
 		texture.CleanUp(allocator, device);
 		heightmap.CleanUp(allocator, device);
+		normalmap.CleanUp(allocator, device);
 	}
 
-	void Terrain::Generate(int verticesPerEdge, int width, float uvScale)
+	int Terrain::Generate(int verticesPerEdge, int width, float uvScale)
 	{
 		// Get triangle count
 		const uint32_t quadsPerSide = verticesPerEdge - 1;
@@ -40,7 +51,7 @@ namespace vbt
 		int triangleCount = quadCount * 2;
 
 		// Get offset from width
-		float vertexOffset = (float)width / (float)verticesPerEdge;
+		float vertexOffset = (float)width / (float)(verticesPerEdge - 1);
 
 		// Generate vertices
 		for (auto x = 0; x < verticesPerEdge; x++)
@@ -76,5 +87,7 @@ namespace vbt
 				indices[index + 5] = indices[index + 1] + 1; // top right
 			}
 		}
+
+		return triangleCount;
 	}
 }

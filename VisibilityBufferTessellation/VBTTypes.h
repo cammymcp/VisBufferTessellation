@@ -33,4 +33,4 @@ struct QueueFamilyIndices
 };
 #pragma endregion
 
-#endif // !HELPERTYPES_H
+#endif // !VBT_TYPES_H

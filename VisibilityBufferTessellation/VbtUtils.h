@@ -94,6 +94,15 @@ namespace vbt
 			x += 360;
 		return x;
 	}
+
+	// Calculates number of triangles produced by barycentric subdivision (i.e. tessellation)
+	// of a single trianlge where outer and inner lod is always equal
+	static int CalculateTriangleSubdivision(int lod) 
+	{
+		if (lod < 0)   return 1;                      
+		if (lod == 0)  return 0;
+		return ((2 * lod - 2) * 3) + CalculateTriangleSubdivision(lod - 2);
+	}
 }
 
 #endif // !HELPERFUNCTIONS_H

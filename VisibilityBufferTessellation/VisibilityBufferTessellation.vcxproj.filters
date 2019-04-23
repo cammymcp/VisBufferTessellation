@@ -78,6 +78,9 @@
     <ClCompile Include="..\..\Libraries\imgui-master\examples\imgui_impl_vulkan.cpp">
       <Filter>Source Files\ImGui</Filter>
     </ClCompile>
+    <ClCompile Include="DirectionalLight.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="VulkanApplication.h">
@@ -145,6 +148,9 @@
     </ClInclude>
     <ClInclude Include="..\..\Libraries\imgui-master\examples\imgui_impl_vulkan.h">
       <Filter>Header Files\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="DirectionalLight.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

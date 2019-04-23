@@ -5,27 +5,29 @@
 
 layout(binding = 0) uniform UniformBufferObject
 {
-	float tessellationFactor;
-} ubo;
+	uint tessellationFactor;
+	uint showVisibilityBuffer;
+	uint showTessCoordsBuffer;
+	uint showInterpolatedTexCoords;
+	uint wireframe;
+} settings;
 
 layout (vertices = 3) out;
- 
-layout (location = 0) in vec3 inNormal[];
-layout (location = 1) in vec2 inTexCoords[];
- 
-layout (location = 0) out vec3 outNormal[3];
-layout (location = 1) out vec2 outTexCoords[3];
+
+layout (location = 0) in vec2 inTexCoords[];
+
+layout (location = 0) out vec2 outTexCoords[3];
 
 void main()
 {
 	if (gl_InvocationID == 0)
 	{
-		if (ubo.tessellationFactor > 0.0)
+		if (settings.tessellationFactor > 0)
 		{
-			gl_TessLevelOuter[0] = ubo.tessellationFactor;
-			gl_TessLevelOuter[1] = ubo.tessellationFactor;
-			gl_TessLevelOuter[2] = ubo.tessellationFactor;
-			gl_TessLevelInner[0] = ubo.tessellationFactor;
+			gl_TessLevelOuter[0] = settings.tessellationFactor;
+			gl_TessLevelOuter[1] = settings.tessellationFactor;
+			gl_TessLevelOuter[2] = settings.tessellationFactor;
+			gl_TessLevelInner[0] = settings.tessellationFactor;
 		}
 		else
 		{
@@ -38,7 +40,7 @@ void main()
 		}
 	}
 
+	// Pass world position through
 	gl_out[gl_InvocationID].gl_Position =  gl_in[gl_InvocationID].gl_Position;
-	outNormal[gl_InvocationID] = inNormal[gl_InvocationID];
 	outTexCoords[gl_InvocationID] = inTexCoords[gl_InvocationID];
 } 

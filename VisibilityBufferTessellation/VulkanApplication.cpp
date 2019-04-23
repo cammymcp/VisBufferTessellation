@@ -29,12 +29,15 @@ void VulkanApplication::Init()
 	vulkan->Init(window);
 	InitCamera();
 	CreateVmaAllocator();
+	InitLight();
 	CreateCommandPool();
+	CreateTimestampPool();
 	CreateRenderPasses();
 	CreateShadePassDescriptorSetLayouts();
 	CreateVisBuffWritePassDescriptorSetLayout();
 	CreateTessWritePassDescriptorSetLayout();
 	CreatePipelineCache();
+	CreatePipelineLayouts();
 	CreateWritePipelines();
 	CreateShadePipelines();
 	InitialiseTerrains();
@@ -44,7 +47,9 @@ void VulkanApplication::Init()
 	CreateShadePassDescriptorSets();
 	CreateWritePassDescriptorSet();
 	CreateTessWritePassDescriptorSet();
+#if IMGUI_ENABLED
 	InitImGui(currentPipeline == VISIBILITYBUFFER ? visBuffRenderPass : tessRenderPass);
+#endif
 	AllocateCommandBuffers();
 	RecordCommandBuffers();
 }
@@ -55,14 +60,18 @@ void VulkanApplication::Update()
 	{
 		glfwPollEvents();
 		UpdateMouse();
-		imGui.Update(frameTime, camera.Position(), camera.Rotation());
+#if IMGUI_ENABLED
+		imGui.Update(frameTime, forwardPassTime, deferredPassTime, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient());
+#endif
 		
 		// Draw frame and calculate frame time
 		auto frameStart = std::chrono::high_resolution_clock::now();
 		DrawFrame();
 		auto frameEnd = std::chrono::high_resolution_clock::now();
 		auto diff = std::chrono::duration<double, std::milli>(frameEnd - frameStart).count();
-		frameTime = (float)diff / 1000.0f;
+		frameTime = diff / 1000.0;
+
+		GetTimestampResults();
 
 		camera.Update(frameTime);
 	}
@@ -73,10 +82,13 @@ void VulkanApplication::Update()
 
 void VulkanApplication::CleanUp()
 {
-	CleanUpSwapChainResources();
+	CleanUpSwapChainResources(); 
 
 	// Destroy Descriptor Pool
 	vkDestroyDescriptorPool(vulkan->Device(), descriptorPool, nullptr);
+
+	// Destroy query pool
+	vkDestroyQueryPool(vulkan->Device(), timestampPool, nullptr);
 
 	// Destroy descriptor layouts
 	vkDestroyDescriptorSetLayout(vulkan->Device(), visBuffShadePassDescSetLayout, nullptr);
@@ -85,15 +97,18 @@ void VulkanApplication::CleanUp()
 	vkDestroyDescriptorSetLayout(vulkan->Device(), tessShadePassDescSetLayout, nullptr);
 
 	// Destroy uniform buffers
+	light.CleanUp(allocator);
 	mvpUniformBuffer.CleanUp(allocator);
-	tessFactorBuffer.CleanUp(allocator);
+	settingsBuffer.CleanUp(allocator);
 
 	// Destroy vertex and index buffers
 	visBuffTerrain.CleanUp(allocator, vulkan->Device());
 	tessTerrain.CleanUp(allocator, vulkan->Device());
 
+#if IMGUI_ENABLED
 	// Destroy ImGui resources
 	imGui.CleanUp();
+#endif
 
 	vmaDestroyAllocator(allocator);
 
@@ -111,6 +126,7 @@ void VulkanApplication::CleanUp()
 }
 #pragma endregion
 
+#if IMGUI_ENABLED
 #pragma region ImGui Functions
 void VulkanApplication::InitImGui(VkRenderPass renderPass)
 {
@@ -123,8 +139,23 @@ void VulkanApplication::InitImGui(VkRenderPass renderPass)
 	initInfo.PipelineCache = pipelineCache;
 	initInfo.Allocator = nullptr;
 	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
-	imGui.Init(this, window, &initInfo, renderPass, commandPool);
-	imGui.Update(0.0f, camera.Position(), camera.Rotation()); // Update imgui frame once to populate buffers
+	imGui.Init(this, window, &initInfo, renderPass, commandPool, visBuffTerrainTriCount, tessTerrainTriCount);
+	imGui.Update(0.0, 0.0, 0.0, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient()); // Update imgui frame once to populate buffers
+}
+
+void VulkanApplication::RecreateImGui(VkRenderPass renderPass)
+{
+	ImGui_ImplVulkan_InitInfo initInfo = {};
+	initInfo.Instance = vulkan->Instance();
+	initInfo.PhysicalDevice = vulkan->PhysDevice().VkHandle();
+	initInfo.Device = vulkan->Device();
+	initInfo.QueueFamily = PhysicalDevice::FindQueueFamilies(vulkan->PhysDevice().VkHandle(), vulkan->Swapchain().Surface()).graphicsFamily.value();
+	initInfo.Queue = vulkan->PhysDevice().Queues()->graphics;
+	initInfo.PipelineCache = pipelineCache;
+	initInfo.Allocator = nullptr;
+	initInfo.CheckVkResultFn = ImGuiCheckVKResult;
+	imGui.Recreate(&initInfo, renderPass, commandPool);
+	imGui.Update(0.0f, 0.0, 0.0, camera.Position(), camera.Rotation(), light.Direction(), light.Diffuse(), light.Ambient());
 }
 
 void VulkanApplication::ApplySettings(AppSettings settings)
@@ -133,36 +164,82 @@ void VulkanApplication::ApplySettings(AppSettings settings)
 	camera.SetPosition(settings.cameraPos);
 	camera.SetRotation(settings.cameraRot);
 
+	// Light
+	light.SetDiffuse(settings.lightDiffuse);
+	light.SetDirection(glm::vec4(settings.lightDirection, 1.0f));
+	light.SetAmbient(settings.lightAmbient);
+
+	// Render settings
+	renderSettingsUbo.tessellationFactor = settings.tessellationFactor;
+	renderSettingsUbo.showTessCoordsBuffer = settings.showTessBuff;
+	renderSettingsUbo.showVisibilityBuffer = settings.showVisBuff;
+	renderSettingsUbo.showInterpolatedTex = settings.showInterpTex;
+	renderSettingsUbo.wireframe = settings.wireframe;
+
 	// Check for pipeline change
 	if (settings.pipeline != currentPipeline)
 	{
+		// Command buffers are re-recorded every frame to satisfy ImGui, so changing the local current pipeline will automatically bind the new pipeline and renderpass objects for the next frame. 
 		currentPipeline = settings.pipeline;
 
 		// Wait for current operations to be finished
 		vkDeviceWaitIdle(vulkan->Device());
 
 		// Need to reinitialise ImGui to be compatible with new renderpass
-		imGui.CleanUp();
-		InitImGui(currentPipeline == VISIBILITYBUFFER ? visBuffRenderPass : tessRenderPass);
+		RecreateImGui(currentPipeline == VISIBILITYBUFFER ? visBuffRenderPass : tessRenderPass);
 	}
 }
 #pragma endregion
+#endif
 
 #pragma region Geometry Functions
 void VulkanApplication::InitialiseTerrains()
 {
 	Terrain::InitInfo visBuffTerrainInfo;
-	visBuffTerrainInfo.verticesPerEdge = 64; 
-	visBuffTerrainInfo.width = 32;
-	visBuffTerrainInfo.uvScale = 5.0f;
+	visBuffTerrainInfo.subdivisions = 542; 
+	visBuffTerrainInfo.width = 64;
+	visBuffTerrainInfo.uvScale = 10.0f;
 	Terrain::InitInfo tessTerrainInfo;
-	tessTerrainInfo.verticesPerEdge = 8;
-	tessTerrainInfo.width = 32;
-	tessTerrainInfo.uvScale = 5.0f;
+	tessTerrainInfo.subdivisions = 14;
+	tessTerrainInfo.width = 64;
+	tessTerrainInfo.uvScale = 10.75f;
 
 	// Generate terrain geometry
-	visBuffTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, visBuffTerrainInfo);
-	tessTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, tessTerrainInfo);
+	visBuffTerrainTriCount = visBuffTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, visBuffTerrainInfo);
+	tessTerrainTriCount = tessTerrain.Init(allocator, vulkan->Device(), vulkan->PhysDevice(), commandPool, tessTerrainInfo);
+}
+#pragma endregion
+
+#pragma region Testing Functions
+void VulkanApplication::CreateTimestampPool()
+{
+	VkQueryPoolCreateInfo timestampPoolInfo = {};
+	timestampPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+	timestampPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+	timestampPoolInfo.queryCount = 4; // Start of forward, end of forward, start of deferred, end of deferred. 
+	timestampPoolInfo.pNext = NULL;
+	timestampPoolInfo.flags = 0;
+
+	if (vkCreateQueryPool(vulkan->Device(), &timestampPoolInfo, nullptr, &timestampPool) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Query pool creation failed");
+	}
+}
+
+void VulkanApplication::GetTimestampResults()
+{
+	// Requests the results of the timestamp queries made in the current frame
+	std::array<uint64_t, 4> timestamps;
+
+	if (vkGetQueryPoolResults(vulkan->Device(), timestampPool, 0, SCAST_U32(timestamps.size()), SCAST_U32(timestamps.size()) * sizeof(uint64_t), timestamps.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to get timestamp results");
+	}
+	else
+	{
+		forwardPassTime = ((double)timestamps[1] - (double)timestamps[0]) / 1000000.0;
+		deferredPassTime = ((double)timestamps[3] - (double)timestamps[2]) / 1000000.0;
+	}
 }
 #pragma endregion
 
@@ -174,6 +251,7 @@ void VulkanApplication::ProcessKeyInput(GLFWwindow* window, int key, int scancod
 	void *data = glfwGetWindowUserPointer(window);
 	VulkanApplication* vulkanApp = static_cast<VulkanApplication*>(data);
 
+	// Camera movement
 	if (key == GLFW_KEY_W)
 	{
 		if (action == GLFW_PRESS)
@@ -218,6 +296,16 @@ void VulkanApplication::ProcessKeyInput(GLFWwindow* window, int key, int scancod
 	}
 	if (key == GLFW_KEY_R && action == GLFW_PRESS)
 		vulkanApp->camera.Reset();
+	if (key == GLFW_KEY_T && action == GLFW_PRESS)
+	{
+		// Switch to tessellation pipeline
+		vulkanApp->SwitchPipeline(VB_TESSELLATION);
+	}
+	if (key == GLFW_KEY_V && action == GLFW_PRESS)
+	{
+		// Switch to vis buff pipeline
+		vulkanApp->SwitchPipeline(VISIBILITYBUFFER);
+	}
 }
 
 void VulkanApplication::ProcessMouseInput(GLFWwindow* window, int button, int action, int mods)
@@ -236,6 +324,7 @@ void VulkanApplication::ProcessMouseInput(GLFWwindow* window, int button, int ac
 		vulkanApp->mouseRightDown = false;
 }
 
+// Rotates camera with mouse movement
 void VulkanApplication::UpdateMouse()
 {
 	double xPos, yPos;
@@ -247,6 +336,23 @@ void VulkanApplication::UpdateMouse()
 	if (mouseRightDown)
 	{
 		camera.Rotate(glm::vec3(-deltaY * camera.rotateSpeed, -deltaX * camera.rotateSpeed, 0.0f));
+	}
+}
+
+void VulkanApplication::SwitchPipeline(PipelineType type)
+{
+	if (currentPipeline != type)
+	{
+		// Command buffers are re-recorded every frame, so changing the local current pipeline will automatically bind the new pipeline and renderpass objects for the next frame. 
+		currentPipeline = type;
+
+		// Wait for current operations to be finished
+		vkDeviceWaitIdle(vulkan->Device());
+
+#if IMGUI_ENABLED
+		// Need to reinitialise ImGui to be compatible with new renderpass
+		RecreateImGui(currentPipeline == VISIBILITYBUFFER ? visBuffRenderPass : tessRenderPass);
+#endif
 	}
 }
 #pragma endregion
@@ -272,6 +378,7 @@ void VulkanApplication::RecreateSwapChain()
 	vulkan->RecreateSwapchain(window);
 	CreateRenderPasses();
 	CreatePipelineCache();
+	CreatePipelineLayouts();
 	CreateWritePipelines();
 	CreateShadePipelines();
 	CreateFrameBuffers();
@@ -291,9 +398,6 @@ void VulkanApplication::CleanUpSwapChainResources()
 	tessVisibilityBuffer.visibility.CleanUp(allocator, vulkan->Device());
 	tessVisibilityBuffer.tessCoords.CleanUp(allocator, vulkan->Device());
 	depthImage.CleanUp(allocator, vulkan->Device());
-
-	// Destroy debug image
-	debugAttachment.CleanUp(allocator, vulkan->Device());
 
 	// Free command buffers
 	vkFreeCommandBuffers(vulkan->Device(), commandPool, SCAST_U32(commandBuffers.size()), commandBuffers.data());
@@ -376,9 +480,6 @@ void VulkanApplication::CreateShadePipelines()
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back faces
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
 	rasterizer.depthBiasEnable = VK_FALSE;
-	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-	rasterizer.depthBiasClamp = 0.0f; // Optional
-	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
 
 	// Set up depth test
 	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -395,18 +496,15 @@ void VulkanApplication::CreateShadePipelines()
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-	// Set up color blending (disbaled, all fragment colors will go to the framebuffer unmodified)
+	// Set up color blending (disabled, all fragment colors will go to the framebuffer unmodified)
 	VkPipelineColorBlendAttachmentState colourBlendAttachment = {};
 	colourBlendAttachment.colorWriteMask = 0xf;
 	colourBlendAttachment.blendEnable = VK_FALSE;
-	VkPipelineColorBlendAttachmentState debugBlendAttachment = {};
-	debugBlendAttachment.colorWriteMask = 0xf;
-	debugBlendAttachment.blendEnable = VK_FALSE;
-	std::array<VkPipelineColorBlendAttachmentState, 2> blendAttachments = { colourBlendAttachment, debugBlendAttachment };
+	std::array<VkPipelineColorBlendAttachmentState, 1> blendAttachments = { colourBlendAttachment };
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
-	colourBlending.attachmentCount = 2;
+	colourBlending.attachmentCount = SCAST_U32(blendAttachments.size());
 	colourBlending.pAttachments = blendAttachments.data();
 
 	// Dynamic State
@@ -416,9 +514,6 @@ void VulkanApplication::CreateShadePipelines()
 	dynamicState.pDynamicStates = dynamicStateEnables.data();
 	dynamicState.dynamicStateCount = SCAST_U32(dynamicStateEnables.size());
 	dynamicState.flags = 0;
-
-	// PipelineLayout
-	CreateVisBuffShadePipelineLayout();
 
 	// We now have everything we need to create the vis buff shade graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
@@ -463,9 +558,6 @@ void VulkanApplication::CreateShadePipelines()
 	fragShaderStageInfo.module = tessFragShaderModule;
 	shaderStages[0] = vertShaderStageInfo;
 	shaderStages[1] = fragShaderStageInfo;
-
-	// PipelineLayout
-	CreateTessShadePipelineLayout();
 
 	// We can now reuse most of the data from the vis buff shade pipeline setup
 	pipelineInfo.pStages = shaderStages;
@@ -540,9 +632,6 @@ void VulkanApplication::CreateWritePipelines()
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // Cull back faces
 	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // Faces are drawn counter clockwise to be considered front-facing
 	rasterizer.depthBiasEnable = VK_FALSE;
-	rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-	rasterizer.depthBiasClamp = 0.0f; // Optional
-	rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
 
 	// Set up depth test
 	VkPipelineDepthStencilStateCreateInfo depthStencil = {};
@@ -559,15 +648,15 @@ void VulkanApplication::CreateWritePipelines()
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass (just vis buff atm)
+	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass
 	VkPipelineColorBlendAttachmentState emptyBlendAttachment = {};
 	emptyBlendAttachment.colorWriteMask = 0xf;
 	emptyBlendAttachment.blendEnable = VK_FALSE;
-	std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachments = { emptyBlendAttachment, emptyBlendAttachment, emptyBlendAttachment };
+	std::array<VkPipelineColorBlendAttachmentState, 2> blendAttachments = { emptyBlendAttachment, emptyBlendAttachment };
 	VkPipelineColorBlendStateCreateInfo colourBlending = {};
 	colourBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colourBlending.logicOpEnable = VK_FALSE;
-	colourBlending.attachmentCount = 3;
+	colourBlending.attachmentCount = SCAST_U32(blendAttachments.size());
 	colourBlending.pAttachments = blendAttachments.data();
 
 	// Dynamic State
@@ -577,9 +666,6 @@ void VulkanApplication::CreateWritePipelines()
 	dynamicState.pDynamicStates = dynamicStateEnables.data();
 	dynamicState.dynamicStateCount = SCAST_U32(dynamicStateEnables.size());
 	dynamicState.flags = 0;
-
-	// PipelineLayout
-	CreateVisBuffWritePipelineLayout();
 
 	// We now have everything we need to create the vis buff write graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
@@ -658,12 +744,9 @@ void VulkanApplication::CreateWritePipelines()
 	tessStateInfo.patchControlPoints = 3;
 
 	// We need to set up color blend attachments for all of the visibility buffer color attachments in the subpass
-	std::array<VkPipelineColorBlendAttachmentState, 4> tessBlendAttachments = { emptyBlendAttachment, emptyBlendAttachment, emptyBlendAttachment, emptyBlendAttachment };
+	std::array<VkPipelineColorBlendAttachmentState, 3> tessBlendAttachments = { emptyBlendAttachment, emptyBlendAttachment, emptyBlendAttachment };
 	colourBlending.attachmentCount = SCAST_U32(tessBlendAttachments.size());
 	colourBlending.pAttachments = tessBlendAttachments.data();
-
-	// PipelineLayout
-	CreateTessWritePipelineLayout();
 
 	// We now have everything we need to create the tess write graphics pipeline
 	pipelineInfo.layout = tessWritePipelineLayout;
@@ -684,75 +767,41 @@ void VulkanApplication::CreateWritePipelines()
 	vkDestroyShaderModule(vulkan->Device(), tessFragShaderModule, nullptr);
 }
 
-void VulkanApplication::CreateVisBuffShadePipelineLayout()
+void VulkanApplication::CreatePipelineLayouts()
 {
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &visBuffShadePassDescSetLayout;
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.flags = 0;
-
-	// Vis Buff Shade Layout
-	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &visBuffShadePipelineLayout) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create vis buff shade pipeline layout");
-	}
-}
-
-void VulkanApplication::CreateVisBuffWritePipelineLayout()
-{
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &visBuffWritePassDescSetLayout; 
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.flags = 0;
-
 	// Vis Buff write layout
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &visBuffWritePassDescSetLayout;
+	pipelineLayoutInfo.pushConstantRangeCount = 0;
+	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+	pipelineLayoutInfo.pNext = nullptr;
+	pipelineLayoutInfo.flags = 0;
 	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &visBuffWritePipelineLayout) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create geometry pipeline layout");
 	}
-}
 
-void VulkanApplication::CreateTessShadePipelineLayout()
-{
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &tessShadePassDescSetLayout;
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.flags = 0;
-
-	// Tess Shade Layout
-	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &tessShadePipelineLayout) != VK_SUCCESS)
+	// Vis Buff Shade Layout
+	pipelineLayoutInfo.pSetLayouts = &visBuffShadePassDescSetLayout;
+	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &visBuffShadePipelineLayout) != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create vis buff tess shade pipeline layout");
+		throw std::runtime_error("Failed to create vis buff shade pipeline layout");
 	}
-}
-
-void VulkanApplication::CreateTessWritePipelineLayout()
-{
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &tessWritePassDescSetLayout;
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
-	pipelineLayoutInfo.pNext = nullptr;
-	pipelineLayoutInfo.flags = 0;
 
 	// Tess write layout
+	pipelineLayoutInfo.pSetLayouts = &tessWritePassDescSetLayout;
 	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &tessWritePipelineLayout) != VK_SUCCESS)
 	{
 		throw std::runtime_error("Failed to create vis buff tess write pipeline layout");
+	}
+
+	// Tess Shade Layout
+	pipelineLayoutInfo.pSetLayouts = &tessShadePassDescSetLayout;
+	if (vkCreatePipelineLayout(vulkan->Device(), &pipelineLayoutInfo, nullptr, &tessShadePipelineLayout) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create vis buff tess shade pipeline layout");
 	}
 }
 
@@ -760,7 +809,6 @@ void VulkanApplication::CreateRenderPasses()
 {
 	// Setup images for use as frame buffer attachments
 	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &visibilityBuffer.visibility, allocator); // 32 bit uint will be unpacked into four 8bit floats
-	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, &debugAttachment, allocator);
 	CreateFrameBufferAttachment(VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &tessVisibilityBuffer.visibility, allocator); 
 	CreateFrameBufferAttachment(VK_FORMAT_R32G32B32A32_UINT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &tessVisibilityBuffer.tessCoords, allocator);
 	CreateDepthResources();
@@ -776,19 +824,16 @@ void VulkanApplication::CreateRenderPasses()
 	swapChainAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 	swapChainAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	swapChainAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-	// Debug Attachment
-	VkAttachmentDescription debugAttachmentDesc = {};
-	debugAttachmentDesc.format = debugAttachment.Format();
-	debugAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-	debugAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	debugAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	debugAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	debugAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	debugAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	debugAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	// Visibility attachment
-	VkAttachmentDescription visibilityAttachmentDesc = debugAttachmentDesc;
+	// Visibility Attachment
+	VkAttachmentDescription visibilityAttachmentDesc = {};
 	visibilityAttachmentDesc.format = visibilityBuffer.visibility.Format();
+	visibilityAttachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+	visibilityAttachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	visibilityAttachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	visibilityAttachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	visibilityAttachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	visibilityAttachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	visibilityAttachmentDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 	// Tess Visibility attachment
 	VkAttachmentDescription tessVisibilityAttachmentDesc = visibilityAttachmentDesc;
 	tessVisibilityAttachmentDesc.format = tessVisibilityBuffer.visibility.Format();
@@ -834,11 +879,10 @@ void VulkanApplication::CreateRenderPasses()
 	dependencies[2].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
 	// Visibility Buffer RenderPass =============================================
-	std::array<VkAttachmentDescription, 4> visBuffAttachments = {};
+	std::array<VkAttachmentDescription, 3> visBuffAttachments = {};
 	visBuffAttachments[0] = swapChainAttachmentDesc;
-	visBuffAttachments[1] = debugAttachmentDesc;
-	visBuffAttachments[2] = visibilityAttachmentDesc;
-	visBuffAttachments[3] = depthAttachmentDesc;
+	visBuffAttachments[1] = visibilityAttachmentDesc;
+	visBuffAttachments[2] = depthAttachmentDesc;
 
 	// Two subpasses
 	std::array<VkSubpassDescription, 2> visBuffSubpassDescriptions{};
@@ -848,9 +892,8 @@ void VulkanApplication::CreateRenderPasses()
 	// Attachment references 
 	std::vector<VkAttachmentReference> visBuffWriteColorReferences;
 	visBuffWriteColorReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-	visBuffWriteColorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Debug attachment
-	visBuffWriteColorReferences.push_back({ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Visibility Buffer attachment
-	VkAttachmentReference depthReference = { 3, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+	visBuffWriteColorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Visibility Buffer attachment
+	VkAttachmentReference depthReference = { 2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
 
 	// Subpass Description
 	visBuffSubpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // Specify that this is a graphics subpass, not compute
@@ -863,9 +906,8 @@ void VulkanApplication::CreateRenderPasses()
 	// Attachment references 
 	std::vector<VkAttachmentReference> visBuffShadeColourReferences;
 	visBuffShadeColourReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-	visBuffShadeColourReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Debug attachment
-	VkAttachmentReference inputReferences[1];
-	inputReferences[0] = { 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }; // Visibility Buffer attachment
+	std::vector <VkAttachmentReference> inputReferences;
+	inputReferences.push_back({ 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }); // Visibility Buffer attachment
 
 	// Subpass Description
 	visBuffSubpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -873,8 +915,8 @@ void VulkanApplication::CreateRenderPasses()
 	visBuffSubpassDescriptions[1].pColorAttachments = visBuffShadeColourReferences.data();
 	visBuffSubpassDescriptions[1].pDepthStencilAttachment = &depthReference;
 	// Input attachments from vis buff write subpass
-	visBuffSubpassDescriptions[1].inputAttachmentCount = 1;
-	visBuffSubpassDescriptions[1].pInputAttachments = inputReferences;
+	visBuffSubpassDescriptions[1].inputAttachmentCount = SCAST_U32(inputReferences.size());
+	visBuffSubpassDescriptions[1].pInputAttachments = inputReferences.data();
 	// --------------------------------------
 
 	// Create the render pass with required attachments
@@ -895,12 +937,11 @@ void VulkanApplication::CreateRenderPasses()
 	// ==========================================================================
 
 	// Tessellataion RenderPass =================================================
-	std::array<VkAttachmentDescription, 5> tessAttachments = {};
+	std::array<VkAttachmentDescription, 4> tessAttachments = {};
 	tessAttachments[0] = swapChainAttachmentDesc;
-	tessAttachments[1] = debugAttachmentDesc;
-	tessAttachments[2] = tessVisibilityAttachmentDesc;
-	tessAttachments[3] = tessCoordsAttachmentDesc;
-	tessAttachments[4] = depthAttachmentDesc;
+	tessAttachments[1] = tessVisibilityAttachmentDesc;
+	tessAttachments[2] = tessCoordsAttachmentDesc;
+	tessAttachments[3] = depthAttachmentDesc;
 
 	// Two subpasses
 	std::array<VkSubpassDescription, 2> tessSubpassDescriptions{};
@@ -910,15 +951,14 @@ void VulkanApplication::CreateRenderPasses()
 	// Attachment references 
 	std::vector<VkAttachmentReference> tessWriteColorReferences;
 	tessWriteColorReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Swapchain image
-	tessWriteColorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Debug attachment
-	tessWriteColorReferences.push_back({ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Visibility Buffer attachment
-	tessWriteColorReferences.push_back({ 3, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Tess Coords attachment
-	VkAttachmentReference tessDepthReference = { 4, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+	tessWriteColorReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Visibility Buffer attachment
+	tessWriteColorReferences.push_back({ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Tess Coords attachment
+	VkAttachmentReference tessDepthReference = { 3, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
 
 	// Subpass Description
 	tessSubpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // Specify that this is a graphics subpass, not compute
 	tessSubpassDescriptions[0].colorAttachmentCount = SCAST_U32(tessWriteColorReferences.size());;
-	tessSubpassDescriptions[0].pColorAttachments = tessWriteColorReferences.data(); // Important: The attachment's index in this array is what is referenced in the out variable of the shader!
+	tessSubpassDescriptions[0].pColorAttachments = tessWriteColorReferences.data(); 
 	tessSubpassDescriptions[0].pDepthStencilAttachment = &tessDepthReference;
 
 	// Second Subpass: Tessellation Shade Pass
@@ -926,10 +966,9 @@ void VulkanApplication::CreateRenderPasses()
 	// Attachment references 
 	std::vector<VkAttachmentReference> tessShadeColourReferences;
 	tessShadeColourReferences.push_back({ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
-	tessShadeColourReferences.push_back({ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }); // Debug attachment
-	VkAttachmentReference tessInputReferences[2];
-	tessInputReferences[0] = { 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }; // Visibility Buffer attachment
-	tessInputReferences[1] = { 3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }; // Tess Coords attachment
+	std::vector<VkAttachmentReference> tessInputReferences;
+	tessInputReferences.push_back({ 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }); // Visibility Buffer attachment
+	tessInputReferences.push_back({ 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }); // Tess Coords attachment
 
 	// Subpass Description
 	tessSubpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -937,8 +976,8 @@ void VulkanApplication::CreateRenderPasses()
 	tessSubpassDescriptions[1].pColorAttachments = tessShadeColourReferences.data();
 	tessSubpassDescriptions[1].pDepthStencilAttachment = &tessDepthReference;
 	// Input attachments from vis buff write subpass
-	tessSubpassDescriptions[1].inputAttachmentCount = 2;
-	tessSubpassDescriptions[1].pInputAttachments = tessInputReferences;
+	tessSubpassDescriptions[1].inputAttachmentCount = SCAST_U32(tessInputReferences.size());
+	tessSubpassDescriptions[1].pInputAttachments = tessInputReferences.data();
 	// --------------------------------------
 
 	// Create the render pass with required attachments
@@ -980,14 +1019,24 @@ VkShaderModule VulkanApplication::CreateShaderModule(const std::vector<char>& co
 void VulkanApplication::InitCamera()
 {
 	camera.SetPerspective(45.0f, (float)vulkan->Swapchain().Extent().width / (float)vulkan->Swapchain().Extent().height, 0.1f, 500.0f, true);
-	camera.SetRotation(glm::vec3(25.0f, 310.0f, 0.0f), true);
+	camera.SetRotation(glm::vec3(10.0f, 310.0f, 0.0f), true);
 	camera.SetPosition(glm::vec3(-2.0f, -6.0f, -1.5f), true);
+}
+
+void VulkanApplication::InitLight()
+{
+	DirectionalLight::InitInfo lightInfo = {};
+	lightInfo.direction = glm::vec4(-0.8944f, -0.4472f, 0.0f, 1.0f);
+	lightInfo.diffuse = glm::vec4(0.818f, 0.713f, 0.556f, 1.0f);
+	lightInfo.ambient = glm::vec4(0.4f, 0.3f, 0.3f, 1.0f);
+
+	light.Init(lightInfo, allocator);
 }
 
 void VulkanApplication::CreateFrameBuffers()
 {
 	// Create Visibility Buffer frame buffers
-	std::array<VkImageView, 4> visBuffAttachments = {};
+	std::array<VkImageView, 3> visBuffAttachments = {};
 
 	VkFramebufferCreateInfo visBuffFramebufferInfo = {};
 	visBuffFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -1003,9 +1052,8 @@ void VulkanApplication::CreateFrameBuffers()
 	for (size_t i = 0; i < vulkan->Swapchain().ImageViews().size(); i++)
 	{
 		visBuffAttachments[0] = vulkan->Swapchain().ImageViews()[i];
-		visBuffAttachments[1] = debugAttachment.ImageView();
-		visBuffAttachments[2] = visibilityBuffer.visibility.ImageView();
-		visBuffAttachments[3] = depthImage.ImageView();
+		visBuffAttachments[1] = visibilityBuffer.visibility.ImageView();
+		visBuffAttachments[2] = depthImage.ImageView();
 
 		if (vkCreateFramebuffer(vulkan->Device(), &visBuffFramebufferInfo, nullptr, &visBuffFramebuffers[i]) != VK_SUCCESS)
 		{
@@ -1014,12 +1062,12 @@ void VulkanApplication::CreateFrameBuffers()
 	}
 
 	// Tessellation Pipeline
-	std::array<VkImageView, 5> tessAttachments = {};
+	std::array<VkImageView, 4> tessAttachments = {};
 
 	VkFramebufferCreateInfo tessFramebufferInfo = {};
 	tessFramebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	tessFramebufferInfo.pNext = NULL;
-	tessFramebufferInfo.renderPass = tessRenderPass; // Tell frame buffer which render pass it should be compatible with
+	tessFramebufferInfo.renderPass = tessRenderPass; 
 	tessFramebufferInfo.attachmentCount = SCAST_U32(tessAttachments.size());
 	tessFramebufferInfo.pAttachments = tessAttachments.data();
 	tessFramebufferInfo.width = vulkan->Swapchain().Extent().width;
@@ -1030,10 +1078,9 @@ void VulkanApplication::CreateFrameBuffers()
 	for (size_t i = 0; i < vulkan->Swapchain().ImageViews().size(); i++)
 	{
 		tessAttachments[0] = vulkan->Swapchain().ImageViews()[i];
-		tessAttachments[1] = debugAttachment.ImageView();
-		tessAttachments[2] = tessVisibilityBuffer.visibility.ImageView();
-		tessAttachments[3] = tessVisibilityBuffer.tessCoords.ImageView();
-		tessAttachments[4] = depthImage.ImageView();
+		tessAttachments[1] = tessVisibilityBuffer.visibility.ImageView();
+		tessAttachments[2] = tessVisibilityBuffer.tessCoords.ImageView();
+		tessAttachments[3] = depthImage.ImageView();
 
 		if (vkCreateFramebuffer(vulkan->Device(), &tessFramebufferInfo, nullptr, &tessFramebuffers[i]) != VK_SUCCESS)
 		{
@@ -1147,7 +1194,7 @@ void VulkanApplication::CreateCommandPool()
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Optional. Allows command buffers to be reworked at runtime
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Allows command buffers to be reworked at runtime
 
 	if (vkCreateCommandPool(vulkan->Device(), &poolInfo, nullptr, &commandPool) != VK_SUCCESS)
 	{
@@ -1174,17 +1221,15 @@ void VulkanApplication::AllocateCommandBuffers()
 void VulkanApplication::RecordCommandBuffers()
 {
 	// Define clear values
-	std::array<VkClearValue, 4> visBuffClearValues = {};
+	std::array<VkClearValue, 3> visBuffClearValues = {};
 	visBuffClearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	visBuffClearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	visBuffClearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	visBuffClearValues[3].depthStencil = { 1.0f, 0 };
-	std::array<VkClearValue, 5> tessClearValues = {};
+	visBuffClearValues[2].depthStencil = { 1.0f, 0 };
+	std::array<VkClearValue, 4> tessClearValues = {};
 	tessClearValues[0].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	tessClearValues[1].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 	tessClearValues[2].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	tessClearValues[3].color = { { 0.0f, 0.0f, 0.0f, 0.0f } };
-	tessClearValues[4].depthStencil = { 1.0f, 0 };
+	tessClearValues[3].depthStencil = { 1.0f, 0 };
 
 	// Begin recording command buffers
 	for (size_t i = 0; i < commandBuffers.size(); i++)
@@ -1192,7 +1237,6 @@ void VulkanApplication::RecordCommandBuffers()
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-		beginInfo.pInheritanceInfo = nullptr; // Optional
 
 		if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS)
 		{
@@ -1218,7 +1262,9 @@ void VulkanApplication::RecordCommandBuffers()
 			renderPassInfo.clearValueCount = SCAST_U32(tessClearValues.size());
 			renderPassInfo.pClearValues = tessClearValues.data();
 		}
-		
+
+		// Reset timestamp queries
+		vkCmdResetQueryPool(commandBuffers[i], timestampPool, 0, 4);		
 
 		// Begin the render pass
 		vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -1237,6 +1283,10 @@ void VulkanApplication::RecordCommandBuffers()
 
 		// First Subpass: Write to visibility buffer using one of two pipelines
 		// -----------------------------------------
+		// Record start timestamp
+		vkCmdWriteTimestamp(commandBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestampPool, 0);
+
+		// Decide which pipeline to bind
 		switch (currentPipeline)
 		{
 			case VISIBILITYBUFFER:
@@ -1262,11 +1312,19 @@ void VulkanApplication::RecordCommandBuffers()
 				break;
 			}
 		}
+
+		// Record end timestamp
+		vkCmdWriteTimestamp(commandBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestampPool, 1);
 		// -----------------------------------------
 
 		// Second Subpass: Shading Pass using one of two pipelines
 		// -----------------------------------------
 		vkCmdNextSubpass(commandBuffers[i], VK_SUBPASS_CONTENTS_INLINE);
+
+		// Record start timestamp
+		vkCmdWriteTimestamp(commandBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestampPool, 2);
+
+		// Decide which pipeline to bind
 		switch (currentPipeline)
 		{
 			case VISIBILITYBUFFER:
@@ -1283,11 +1341,16 @@ void VulkanApplication::RecordCommandBuffers()
 				vkCmdDraw(commandBuffers[i], 3, 1, 0, 0); // Vertex shader calculates positions of fullscreen triangle based on index, so no need to bind vertex/index buffers to create a fullscreen quad
 				break;
 			}
-		}		
+		}
+
+		// Record end timestamp
+		vkCmdWriteTimestamp(commandBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestampPool, 3);
 		// -----------------------------------------
 
+#if IMGUI_ENABLED
 		// Imgui pass
 		imGui.DrawFrame(commandBuffers[i]);
+#endif
 
 		// Now end the render pass
 		vkCmdEndRenderPass(commandBuffers[i]);
@@ -1353,10 +1416,10 @@ void VulkanApplication::CreateUniformBuffers()
 	// Create uniform buffer terrain transform matrices
 	mvpUniformBuffer.Create(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 
-	bufferSize = sizeof(TessFactorUBO);
+	bufferSize = sizeof(SettingsUBO);
 
 	// Create tess factor UBO for tessellation pipeline
-	tessFactorBuffer.Create(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
+	settingsBuffer.Create(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, allocator);
 }
 
 void VulkanApplication::UpdateUniformBuffers()
@@ -1382,10 +1445,11 @@ void VulkanApplication::UpdateUniformBuffers()
 	// Now map the memory to mvp uniform buffer
 	mvpUniformBuffer.MapData(&ubo, allocator);
 
-	// Map tessellation factor to ubo
-	TessFactorUBO tessUbo = {};
-	tessUbo.tessellationFactor = 10.0f;
-	tessFactorBuffer.MapData(&tessUbo, allocator);
+	// Map rendering settings to ubo
+	settingsBuffer.MapData(&renderSettingsUbo, allocator);
+
+	// Update light ubo
+	light.UpdateUBO(allocator);
 }
 
 void VulkanApplication::CreateVmaAllocator()
@@ -1402,9 +1466,9 @@ void VulkanApplication::CreateDescriptorPool()
 {
 	std::array<VkDescriptorPoolSize, 4> poolSizes = {};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 2) + 3; // mvp UBO per swapchain image plus mvp ubo for the write pass plus mvp ubo and tessfactor for tess write pass
+	poolSizes[0].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 6) + 3; // mvp UBO, light UBO and settings UBO per swapchain image plus mvp ubo for the write pass plus mvp ubo and settings for tess write pass
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 2) + 2; // 1 sampled image per swapchain image plus heightmap for write pass plus heightmap in tess write pass
+	poolSizes[1].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 6) + 2; // terrain texture and heightmap and normalmap per swapchain image per pipeline plus two for the write pipelines
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	poolSizes[2].descriptorCount = (SCAST_U32(vulkan->Swapchain().Images().size()) * 2) * 2; // 2 storage buffers per swapchain image per shade pass
 	poolSizes[3].type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
@@ -1460,15 +1524,43 @@ void VulkanApplication::CreateShadePassDescriptorSetLayouts()
 	attributeBufferBinding.descriptorCount = 1;
 	attributeBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	// Binding 5: TessCoords Buffer (Tessellation pipeline only)
+	// Binding 5: Render Settings Buffer
+	VkDescriptorSetLayoutBinding settingsBufferBinding = {};
+	settingsBufferBinding.binding = 5;
+	settingsBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	settingsBufferBinding.descriptorCount = 1;
+	settingsBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	// Binding 6: Heightmap texture sampler
+	VkDescriptorSetLayoutBinding heightmapLayoutBinding = {};
+	heightmapLayoutBinding.binding = 6;
+	heightmapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	heightmapLayoutBinding.descriptorCount = 1;
+	heightmapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	// Binding 7: Normalmap texture sampler
+	VkDescriptorSetLayoutBinding normalmapLayoutBinding = {};
+	normalmapLayoutBinding.binding = 7;
+	normalmapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	normalmapLayoutBinding.descriptorCount = 1;
+	normalmapLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	// Binding 8: Directional light UBO
+	VkDescriptorSetLayoutBinding lightUboBinding = {};
+	lightUboBinding.binding = 8;
+	lightUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	lightUboBinding.descriptorCount = 1;
+	lightUboBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	// Binding 9: TessCoords Buffer (Tessellation pipeline only)
 	VkDescriptorSetLayoutBinding tessBufferBinding = {};
-	tessBufferBinding.binding = 5;
+	tessBufferBinding.binding = 9;
 	tessBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 	tessBufferBinding.descriptorCount = 1;
 	tessBufferBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
 	// Create descriptor set layout for Visibility Buffer Pipeline
-	std::array<VkDescriptorSetLayoutBinding, 5> visBuffBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding };
+	std::array<VkDescriptorSetLayoutBinding, 9> visBuffBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding, normalmapLayoutBinding, lightUboBinding };
 	VkDescriptorSetLayoutCreateInfo visBuffLayoutInfo = {};
 	visBuffLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	visBuffLayoutInfo.bindingCount = SCAST_U32(visBuffBindings.size());
@@ -1479,7 +1571,7 @@ void VulkanApplication::CreateShadePassDescriptorSetLayouts()
 	}
 
 	// Create descriptor set layout for Tessellation Pipeline
-	std::array<VkDescriptorSetLayoutBinding, 6> tessBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, tessBufferBinding };
+	std::array<VkDescriptorSetLayoutBinding, 10> tessBindings = { modelUboLayoutBinding, textureSamplerBinding, visBufferBinding, indexBufferBinding, attributeBufferBinding, settingsBufferBinding, heightmapLayoutBinding, normalmapLayoutBinding, lightUboBinding, tessBufferBinding };
 	VkDescriptorSetLayoutCreateInfo tessLayoutInfo = {};
 	tessLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	tessLayoutInfo.bindingCount = SCAST_U32(tessBindings.size());
@@ -1505,7 +1597,7 @@ void VulkanApplication::CreateVisBuffWritePassDescriptorSetLayout()
 	heightmapLayoutBinding.binding = 1;
 	heightmapLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	heightmapLayoutBinding.descriptorCount = 1;
-	heightmapLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; 
+	heightmapLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	// Create descriptor set layout
 	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { modelUboLayoutBinding, heightmapLayoutBinding };
@@ -1523,7 +1615,7 @@ void VulkanApplication::CreateVisBuffWritePassDescriptorSetLayout()
 void VulkanApplication::CreateTessWritePassDescriptorSetLayout()
 {
 	// Descriptor layout for the tessellation write pass
-	// Binding 0: Tessellation factor UBO for hull shader
+	// Binding 0: Render settings UBO for hull shader tess factor
 	VkDescriptorSetLayoutBinding tessFactorLayoutBinding = {};
 	tessFactorLayoutBinding.binding = 0;
 	tessFactorLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1602,13 +1694,30 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		visBuffTerrain.SetupIndexBufferDescriptor(visBuffShadePassDescSets[i], 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
 		visBuffTerrain.SetupAttributeBufferDescriptor(visBuffShadePassDescSets[i], 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
 
+		// Settings UBO
+		settingsBuffer.SetupDescriptor(sizeof(SettingsUBO), 0);
+		settingsBuffer.SetupDescriptorWriteSet(visBuffShadePassDescSets[i], 5, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
+
+		// Heightmap texture
+		visBuffTerrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffShadePassDescSets[i], 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+
+		// Normalmap texture
+		visBuffTerrain.SetupNormalmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffShadePassDescSets[i], 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+
+		// Directional light ubo
+		light.SetupUBODescriptors(visBuffShadePassDescSets[i], 8, 1);
+
 		// Create a descriptor writes for each descriptor in the set
-		std::array<VkWriteDescriptorSet, 5> visBuffShadePassDescriptorWrites = {};
+		std::array<VkWriteDescriptorSet, 9> visBuffShadePassDescriptorWrites = {};
 		visBuffShadePassDescriptorWrites[0] = visBuffTerrain.GetTexture().WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[1] = visibilityBuffer.visibility.WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[3] = visBuffTerrain.IndexBuffer().WriteDescriptorSet();
 		visBuffShadePassDescriptorWrites[4] = visBuffTerrain.AttributeBuffer().WriteDescriptorSet();
+		visBuffShadePassDescriptorWrites[5] = settingsBuffer.WriteDescriptorSet();
+		visBuffShadePassDescriptorWrites[6] = visBuffTerrain.Heightmap().WriteDescriptorSet();
+		visBuffShadePassDescriptorWrites[7] = visBuffTerrain.Normalmap().WriteDescriptorSet();
+		visBuffShadePassDescriptorWrites[8] = light.UBO().WriteDescriptorSet();
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(visBuffShadePassDescriptorWrites.size()), visBuffShadePassDescriptorWrites.data(), 0, nullptr);
 
 		// Now for the tessellation pipeline
@@ -1616,19 +1725,27 @@ void VulkanApplication::CreateShadePassDescriptorSets()
 		mvpUniformBuffer.SetupDescriptorWriteSet(tessShadePassDescSets[i], 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 		tessTerrain.SetupIndexBufferDescriptor(tessShadePassDescSets[i], 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
 		tessTerrain.SetupAttributeBufferDescriptor(tessShadePassDescSets[i], 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
+		settingsBuffer.SetupDescriptorWriteSet(tessShadePassDescSets[i], 5, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
+		visBuffTerrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessShadePassDescSets[i], 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+		visBuffTerrain.SetupNormalmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tessShadePassDescSets[i], 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+		light.SetupUBODescriptors(tessShadePassDescSets[i], 8, 1);
 		// Tess Visibility Buffer attachment
 		tessVisibilityBuffer.visibility.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_NULL_HANDLE);
 		tessVisibilityBuffer.visibility.SetupDescriptorWriteSet(tessShadePassDescSets[i], 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
 		tessVisibilityBuffer.tessCoords.SetUpDescriptorInfo(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_NULL_HANDLE);
-		tessVisibilityBuffer.tessCoords.SetupDescriptorWriteSet(tessShadePassDescSets[i], 5, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
+		tessVisibilityBuffer.tessCoords.SetupDescriptorWriteSet(tessShadePassDescSets[i], 9, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1);
 
-		std::array<VkWriteDescriptorSet, 6> tessShadePassDescriptorWrites = {};
+		std::array<VkWriteDescriptorSet, 10> tessShadePassDescriptorWrites = {};
 		tessShadePassDescriptorWrites[0] = tessTerrain.GetTexture().WriteDescriptorSet();
 		tessShadePassDescriptorWrites[1] = tessVisibilityBuffer.visibility.WriteDescriptorSet();
 		tessShadePassDescriptorWrites[2] = mvpUniformBuffer.WriteDescriptorSet();
 		tessShadePassDescriptorWrites[3] = tessTerrain.IndexBuffer().WriteDescriptorSet();
 		tessShadePassDescriptorWrites[4] = tessTerrain.AttributeBuffer().WriteDescriptorSet();
-		tessShadePassDescriptorWrites[5] = tessVisibilityBuffer.tessCoords.WriteDescriptorSet();
+		tessShadePassDescriptorWrites[5] = settingsBuffer.WriteDescriptorSet();
+		tessShadePassDescriptorWrites[6] = visBuffTerrain.Heightmap().WriteDescriptorSet();
+		tessShadePassDescriptorWrites[7] = visBuffTerrain.Normalmap().WriteDescriptorSet();
+		tessShadePassDescriptorWrites[8] = light.UBO().WriteDescriptorSet();
+		tessShadePassDescriptorWrites[9] = tessVisibilityBuffer.tessCoords.WriteDescriptorSet();
 		vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(tessShadePassDescriptorWrites.size()), tessShadePassDescriptorWrites.data(), 0, nullptr);
 	}
 }
@@ -1655,7 +1772,7 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 	mvpUniformBuffer.SetupDescriptor(sizeof(MVPUniformBufferObject), 0);
 	mvpUniformBuffer.SetupDescriptorWriteSet(visBuffWritePassDescSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
-	// Heightmap texture (Both terrains will be using the same heightmap, so it's okay to just initialise the visBuffTerrain's one. Saves having to descriptor sets for the write pass)
+	// Heightmap texture
 	visBuffTerrain.SetupHeightmapDescriptor(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, visBuffWritePassDescSet, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
 
 	// Create a descriptor write for each descriptor in the set
@@ -1664,7 +1781,7 @@ void VulkanApplication::CreateWritePassDescriptorSet()
 	// Binding 0: MVP Uniform Buffer of terrain
 	writePassDescriptorWrites[0] = mvpUniformBuffer.WriteDescriptorSet();
 
-	// Binding 1: Heightmap texture for vertex buffer
+	// Binding 1: Heightmap texture
 	writePassDescriptorWrites[1] = visBuffTerrain.Heightmap().WriteDescriptorSet();
 
 	vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(writePassDescriptorWrites.size()), writePassDescriptorWrites.data(), 0, nullptr);
@@ -1688,9 +1805,9 @@ void VulkanApplication::CreateTessWritePassDescriptorSet()
 		throw std::runtime_error("Failed to allocate tess write pass descriptor sets");
 	}
 
-	// Tessellation factor UBO
-	tessFactorBuffer.SetupDescriptor(sizeof(TessFactorUBO), 0);
-	tessFactorBuffer.SetupDescriptorWriteSet(tessWritePassDescSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
+	// Settings UBO
+	settingsBuffer.SetupDescriptor(sizeof(SettingsUBO), 0);
+	settingsBuffer.SetupDescriptorWriteSet(tessWritePassDescSet, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1);
 
 	// Terrain UBO
 	mvpUniformBuffer.SetupDescriptor(sizeof(MVPUniformBufferObject), 0);
@@ -1702,13 +1819,13 @@ void VulkanApplication::CreateTessWritePassDescriptorSet()
 	// Create a descriptor write for each descriptor in the set
 	std::array<VkWriteDescriptorSet, 3> tessWritePassDescriptorWrites = {};
 
-	// Binding 0: Tessellation factors
-	tessWritePassDescriptorWrites[0] = tessFactorBuffer.WriteDescriptorSet();
+	// Binding 0: Rendering settings
+	tessWritePassDescriptorWrites[0] = settingsBuffer.WriteDescriptorSet();
 
 	// Binding 1: MVP Uniform Buffer of terrain
 	tessWritePassDescriptorWrites[1] = mvpUniformBuffer.WriteDescriptorSet();
 
-	// Binding 2: Heightmap texture for vertex buffer
+	// Binding 2: Heightmap texture
 	tessWritePassDescriptorWrites[2] = visBuffTerrain.Heightmap().WriteDescriptorSet();
 
 	vkUpdateDescriptorSets(vulkan->Device(), SCAST_U32(tessWritePassDescriptorWrites.size()), tessWritePassDescriptorWrites.data(), 0, nullptr);

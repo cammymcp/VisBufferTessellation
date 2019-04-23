@@ -12,8 +12,7 @@ layout(location = 0) in flat uint drawID;
 
 // Out 
 layout(location = 0) out vec4 outColour;
-layout(location = 1) out vec4 debug;
-layout(location = 2) out vec4 visBuff;
+layout(location = 1) out vec4 visBuff;
 
 // Engel's packing function (without alpha bit)
 uint calculateOutputVBID(uint drawID, uint primitiveID)
@@ -26,7 +25,6 @@ void main()
 {
 	// Write to colour attachments to avoid undefined behaviour
 	outColour = vec4(0.0); 
-	debug = vec4(0.0);
 
 	// Fill visibility buffer
 	visBuff = unpackUnorm4x8(calculateOutputVBID(drawID, gl_PrimitiveID + 1)); // Offset primitive ID so that the first primitive in each draw call is not lost due to being 0

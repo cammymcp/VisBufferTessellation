@@ -11,6 +11,7 @@
 #include "Texture.h"
 #include "Camera.h"
 #include "VbtImGUI.h"
+#include "DirectionalLight.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // Ensure that GLM works in Vulkan's clip coordinates of 0.0 to 1.0
@@ -18,9 +19,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #pragma region Constants
-const int WIDTH = 1280;
-const int HEIGHT = 720;
-const std::string MODEL_PATH = "models/chalet.obj";
+const int WIDTH = 1920;
+const int HEIGHT = 1080;
 #pragma endregion
 
 #pragma region Frame Buffers
@@ -42,9 +42,13 @@ struct MVPUniformBufferObject
 	glm::mat4 proj;
 };
 
-struct TessFactorUBO
+struct SettingsUBO
 {
-	float tessellationFactor;
+	uint32_t tessellationFactor = 34;
+	uint32_t showVisibilityBuffer = 0;
+	uint32_t showTessCoordsBuffer = 0;
+	uint32_t showInterpolatedTex = 0;
+	uint32_t wireframe = 0;
 };
 #pragma endregion
 
@@ -60,12 +64,15 @@ namespace vbt
 			CleanUp();
 		}
 
-		VulkanCore* GetVulkanCore() { return vulkan; }
+#if IMGUI_ENABLED
 		void ApplySettings(AppSettings settings);
+#endif
+		VulkanCore* GetVulkanCore() { return vulkan; }
+		void SwitchPipeline(PipelineType type);
 
 		const std::string title = "Visibility Buffer Tessellation";
 	private:
-		// Functions
+		// Functions ==============================================
 #pragma region Core Functions
 		void InitWindow();
 		void Init();
@@ -73,12 +80,20 @@ namespace vbt
 		void CleanUp();
 #pragma endregion
 
+#if IMGUI_ENABLED
 #pragma region ImGui Functions
 		void InitImGui(VkRenderPass renderPass);
+		void RecreateImGui(VkRenderPass renderPass);
 #pragma endregion
+#endif
 
 #pragma region Geometry Functions
 		void InitialiseTerrains();
+#pragma endregion
+
+#pragma region Testing Functions
+		void CreateTimestampPool();
+		void GetTimestampResults();
 #pragma endregion
 
 #pragma region Input Functions
@@ -94,18 +109,16 @@ namespace vbt
 
 #pragma region Graphics Pipeline Functions
 		void CreatePipelineCache();
+		void CreatePipelineLayouts();
 		void CreateShadePipelines();
 		void CreateWritePipelines();
-		void CreateVisBuffShadePipelineLayout();
-		void CreateVisBuffWritePipelineLayout();
-		void CreateTessShadePipelineLayout();
-		void CreateTessWritePipelineLayout();
 		void CreateRenderPasses();
 		VkShaderModule CreateShaderModule(const std::vector<char>& code);
 #pragma endregion
 
 #pragma region Drawing Functions
 		void InitCamera();
+		void InitLight();
 		void CreateFrameBuffers();
 		void CreateFrameBufferAttachment(VkFormat format, VkImageUsageFlags usage, Image* attachment, VmaAllocator& allocator);
 		void DrawFrame();
@@ -143,17 +156,24 @@ namespace vbt
 		static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 #pragma endregion
 
+		// =========================================================
+
 #pragma region Shared Objects
 		GLFWwindow* window;
 		VulkanCore* vulkan;
+#if IMGUI_ENABLED
 		ImGUI imGui;
+#endif
 		Camera camera;
+		DirectionalLight light;
 		VkPipelineCache pipelineCache;
 		VkCommandPool commandPool;
 		VkDescriptorPool descriptorPool;
+		VkQueryPool timestampPool;
 		VmaAllocator allocator;
 		std::vector<VkCommandBuffer> commandBuffers;
 		vbt::Image depthImage;
+		Buffer settingsBuffer;
 #pragma endregion
 
 #pragma region Visibility Buffer Pipeline 
@@ -189,21 +209,21 @@ namespace vbt
 		Terrain visBuffTerrain;
 		Terrain tessTerrain;
 		Buffer mvpUniformBuffer;
-		Buffer tessFactorBuffer;
 #pragma endregion
 
 #pragma region Input, Settings, Counters and Flags
 		PipelineType currentPipeline = VISIBILITYBUFFER;
+		SettingsUBO renderSettingsUbo;
 		size_t currentFrame = 0;
 		bool framebufferResized = false;
-		float frameTime = 0.0f;
+		double frameTime = 0.0;
+		double forwardPassTime = 0.0;
+		double deferredPassTime = 0.0;
 		glm::vec2 mousePosition = glm::vec3();
 		bool mouseLeftDown = false;
 		bool mouseRightDown = false;
-#pragma endregion
-
-#pragma region Debug Objects
-		Image debugAttachment;
+		int visBuffTerrainTriCount = 0;
+		int tessTerrainTriCount = 0;
 #pragma endregion
 	};
 }
