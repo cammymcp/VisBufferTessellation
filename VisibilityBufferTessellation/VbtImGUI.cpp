@@ -198,7 +198,7 @@ namespace vbt
 			if (ImGui::Checkbox("Show Visibility Buffer", &(currentSettings.showVisBuff))) currentSettings.updateSettings = true;
 			if (ImGui::Checkbox("Show Interpolated UV Coords", &(currentSettings.showInterpTex))) currentSettings.updateSettings = true;
 			if (currentSettings.pipeline == VB_TESSELLATION) if(ImGui::Checkbox("Show Tess Coords Buffer", &(currentSettings.showTessBuff))) currentSettings.updateSettings = true;
-			if (ImGui::Checkbox("Wireframe", &(currentSettings.wireframe))) currentSettings.updateSettings = true;
+			/*if (ImGui::Checkbox("Wireframe", &(currentSettings.wireframe))) currentSettings.updateSettings = true;*/
 			if (currentSettings.pipeline == VB_TESSELLATION) if(ImGui::SliderInt("Tess Factor", &(currentSettings.tessellationFactor), 2, 64)) currentSettings.updateSettings = true;
 		}
 		ImGui::End();
@@ -226,7 +226,7 @@ namespace vbt
 			}
 			if (frameTimeSample > 0.0f && forwardTimeSample > 0.0f && deferredTimeSample > 0.0f)
 			{
-				ImGui::Text("Averaged Time Sampled (Last 10 frames)");
+				ImGui::Text("Averaged Time Samples (Last 20 frames)");
 				ImGui::Text("Full Frame: %.3f ms", frameTimeSample);
 				ImGui::Text("Forward Pass: %.3f ms", forwardTimeSample);
 				ImGui::Text("Deferred Pass: %.3f ms", deferredTimeSample);
@@ -275,17 +275,17 @@ namespace vbt
 		deferredTimeMax = 0.0f;
 	}
 
-	// Takes last 10 frame times and averages them
+	// Takes last 20 frame times and averages them
 	void ImGUI::SampleFrameTimes()
 	{
 		if (frameTimes[49] != 0.0f)
 		{
 			float sum = 0.0f;
-			for (int i = frameTimes.size() - 1; i > frameTimes.size() - 11; i--)
+			for (int i = frameTimes.size() - 1; i > frameTimes.size() - 21; i--)
 			{
 				sum += frameTimes[i];
 			}
-			frameTimeSample = sum / 10;
+			frameTimeSample = sum / 20;
 		}
 	}
 	void ImGUI::SampleForwardTimes()
@@ -293,11 +293,11 @@ namespace vbt
 		if (forwardTimes[49] != 0.0f)
 		{
 			float sum = 0.0f;
-			for (int i = forwardTimes.size() - 1; i > forwardTimes.size() - 11; i--)
+			for (int i = forwardTimes.size() - 1; i > forwardTimes.size() - 21; i--)
 			{
 				sum += forwardTimes[i];
 			}
-			forwardTimeSample = sum / 10;
+			forwardTimeSample = sum / 20;
 		}
 	}
 	void ImGUI::SampleDeferredTimes()
@@ -305,11 +305,11 @@ namespace vbt
 		if (deferredTimes[49] != 0.0f)
 		{
 			float sum = 0.0f;
-			for (int i = deferredTimes.size() - 1; i > deferredTimes.size() - 11; i--)
+			for (int i = deferredTimes.size() - 1; i > deferredTimes.size() - 21; i--)
 			{
 				sum += deferredTimes[i];
 			}
-			deferredTimeSample = sum / 10;
+			deferredTimeSample = sum / 20;
 		}
 	}
 

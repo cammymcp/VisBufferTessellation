@@ -53,10 +53,10 @@ namespace vbt
 		void SampleForwardTimes();
 		void SampleDeferredTimes();
 
+		VulkanApplication* appHandle;
+
 		// Vulkan Resources
 		VkDescriptorPool descriptorPool;
-
-		VulkanApplication* appHandle;
 
 		// Cached values
 		int visBuffTriCount = 0, tessTricount = 0;

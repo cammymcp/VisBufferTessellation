@@ -1,5 +1,5 @@
-#ifndef TERRAINPATCH_H
-#define TERRAINPATCH_H
+#ifndef TERRAIN_H
+#define TERRAIN_H
 
 #include "Mesh.h"
 #include "Texture.h"

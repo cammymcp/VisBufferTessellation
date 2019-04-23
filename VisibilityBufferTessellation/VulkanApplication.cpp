@@ -179,7 +179,7 @@ void VulkanApplication::ApplySettings(AppSettings settings)
 	// Check for pipeline change
 	if (settings.pipeline != currentPipeline)
 	{
-		// Command buffers are re-recorded every frame, so changing the local current pipeline will automatically bind the new pipeline and renderpass objects for the next frame. 
+		// Command buffers are re-recorded every frame to satisfy ImGui, so changing the local current pipeline will automatically bind the new pipeline and renderpass objects for the next frame. 
 		currentPipeline = settings.pipeline;
 
 		// Wait for current operations to be finished
@@ -324,6 +324,7 @@ void VulkanApplication::ProcessMouseInput(GLFWwindow* window, int button, int ac
 		vulkanApp->mouseRightDown = false;
 }
 
+// Rotates camera with mouse movement
 void VulkanApplication::UpdateMouse()
 {
 	double xPos, yPos;

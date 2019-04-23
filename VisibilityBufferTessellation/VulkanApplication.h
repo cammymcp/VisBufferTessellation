@@ -72,7 +72,7 @@ namespace vbt
 
 		const std::string title = "Visibility Buffer Tessellation";
 	private:
-		// Functions
+		// Functions ==============================================
 #pragma region Core Functions
 		void InitWindow();
 		void Init();
@@ -155,6 +155,8 @@ namespace vbt
 #pragma region Other Functions
 		static void FrameBufferResizeCallback(GLFWwindow* window, int width, int height);
 #pragma endregion
+
+		// =========================================================
 
 #pragma region Shared Objects
 		GLFWwindow* window;
