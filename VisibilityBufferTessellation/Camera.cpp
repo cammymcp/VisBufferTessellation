@@ -13,7 +13,8 @@ namespace vbt
 			forward.z = cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y));
 			forward = glm::normalize(forward);
 
-			float speed = frameTime * moveSpeed;
+			float dt = frameTime < 0.001f ? 0.001f : frameTime;
+			float speed = dt * moveSpeed;
 
 			if (input.forward)
 				position += forward * speed;
