@@ -177,7 +177,7 @@ void main()
 	if (visibilityRaw != vec4(0.0))
 	{
 		// Output debug tess coords
-		vec4 tessCoordsColour = vec4(float(tessCoords_v1XYZ_v2X.x), float(tessCoords_v1XYZ_v2X.y), float(tessCoords_v1XYZ_v2X.z), 1.0);
+		vec4 tessCoordsColour = vec4(packUnorm4x8(vec4(tessCoords_v1XYZ_v2X.xyz, 0)), packUnorm4x8(vec4(tessCoords_v1XYZ_v2X.w, tessCoords_v2YZ_v3XY.xy, 0)), packUnorm4x8(vec4(tessCoords_v2YZ_v3XY.zw, tessCoords_v3Z, 0)), 1.0);
 		tessCoordsColour = normalize(tessCoordsColour);
 
 		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the number of draw call to which the triangle belongs
