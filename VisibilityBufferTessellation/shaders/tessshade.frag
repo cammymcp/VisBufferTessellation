@@ -31,7 +31,9 @@ layout(location = 0) out vec4 outColour;
 // Descriptors
 layout (set = 0, binding = 0) uniform sampler2D textureSampler;
 layout (input_attachment_index = 0, set = 0, binding = 1) uniform subpassInput inputVisibility;
-layout (input_attachment_index = 1, set = 0, binding = 9) uniform usubpassInput inputTessCoords;
+layout (input_attachment_index = 1, set = 0, binding = 9) uniform subpassInput inputTessCoords1;
+layout (input_attachment_index = 1, set = 0, binding = 10) uniform subpassInput inputTessCoords2;
+layout (input_attachment_index = 1, set = 0, binding = 11) uniform subpassInput inputTessCoords3;
 layout(set = 0, binding = 2) uniform MVPUniformBufferObject 
 {
     mat4 mvp;
@@ -135,14 +137,14 @@ Vertex[3] LoadPatchControlPoints(uint drawID, uint primID)
 // Re-evaluates the evaluation stage for the tessellated primitive this fragment belongs to.
 // Takes input patch control points and interpolates to tessellated vertices with stored 
 // tessellation coordinates
-Vertex[3] EvaluateTessellatedPrimitive(Vertex[3] patchControlPoints, uvec4 tessCoordsRaw)
+Vertex[3] EvaluateTessellatedPrimitive(Vertex[3] patchControlPoints, vec4 tessCoords_v1XYZ_v2X, vec4 tessCoords_v2YZ_v3XY, float tessCoords_v3Z)
 {
 	Vertex[3] vertices;
 
 	// Extract tessellation (barycentric) coordinates for the three vertices
-	vec3 tessCoord0 = unpackUnorm4x8(tessCoordsRaw.x).xyz;
-	vec3 tessCoord1 = unpackUnorm4x8(tessCoordsRaw.y).xyz;
-	vec3 tessCoord2 = unpackUnorm4x8(tessCoordsRaw.z).xyz;
+	vec3 tessCoord0 = tessCoords_v1XYZ_v2X.xyz;
+	vec3 tessCoord1 = vec3(tessCoords_v1XYZ_v2X.w, tessCoords_v2YZ_v3XY.xy);
+	vec3 tessCoord2 = vec3(tessCoords_v2YZ_v3XY.zw, tessCoords_v3Z);
 	
 	// Interpolate positions
 	vertices[0].posXYZnormX.xyz = Interpolate3DLinear(patchControlPoints[0].posXYZnormX.xyz, patchControlPoints[1].posXYZnormX.xyz, patchControlPoints[2].posXYZnormX.xyz, tessCoord0);
@@ -166,14 +168,16 @@ void main()
 {
 	// Unpack triangle ID and draw ID from visibility buffer
 	vec4 visibilityRaw = subpassLoad(inputVisibility);
-	uvec4 tessCoordsRaw = subpassLoad(inputTessCoords);
+	vec4 tessCoords_v1XYZ_v2X = subpassLoad(inputTessCoords1);
+	vec4 tessCoords_v2YZ_v3XY = subpassLoad(inputTessCoords2);
+	float tessCoords_v3Z = subpassLoad(inputTessCoords3).x;
 	uint DrawIdTriId = packUnorm4x8(visibilityRaw);
 
 	// If this pixel doesn't contain triangle data, return early
 	if (visibilityRaw != vec4(0.0))
 	{
 		// Output debug tess coords
-		vec4 tessCoordsColour = vec4(float(tessCoordsRaw.x), float(tessCoordsRaw.y), float(tessCoordsRaw.z), 1.0);
+		vec4 tessCoordsColour = vec4(packUnorm4x8(vec4(tessCoords_v1XYZ_v2X.xyz, 0)), packUnorm4x8(vec4(tessCoords_v1XYZ_v2X.w, tessCoords_v2YZ_v3XY.xy, 0)), packUnorm4x8(vec4(tessCoords_v2YZ_v3XY.zw, tessCoords_v3Z, 0)), 1.0);
 		tessCoordsColour = normalize(tessCoordsColour);
 
 		uint drawID = (DrawIdTriId >> 23) & 0x000000FF; // Draw ID the number of draw call to which the triangle belongs
@@ -183,7 +187,7 @@ void main()
 		Vertex[3] patchControlPoints = LoadPatchControlPoints(drawID, triangleID);
 
 		// Now interpolate to the generated tessellation primitive using stored tess coords
-		Vertex[3] primitiveVertices = EvaluateTessellatedPrimitive(patchControlPoints, tessCoordsRaw);
+		Vertex[3] primitiveVertices = EvaluateTessellatedPrimitive(patchControlPoints, tessCoords_v1XYZ_v2X, tessCoords_v2YZ_v3XY, tessCoords_v3Z);
 		
 		// Get position data of vertices
 		vec3 vertPos0 = primitiveVertices[0].posXYZnormX.xyz;

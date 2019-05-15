@@ -31,7 +31,7 @@ struct VisibilityBuffer
 
 struct TessellationVisibilityBuffer
 {
-	vbt::Image visibility, tessCoords;
+	vbt::Image visibility, tessCoords_v1XYZ_v2X, tessCoords_v2YZ_v3XY, tessCoords_v3Z;
 };
 #pragma endregion
 

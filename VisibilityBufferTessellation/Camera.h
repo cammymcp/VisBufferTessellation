@@ -27,7 +27,7 @@ namespace vbt
 		glm::mat4 ProjectionMatrix() const { return projMatrix; }
 
 		float rotateSpeed = 0.25f;
-		float moveSpeed = 1.0f;
+		float moveSpeed = 2.5f;
 
 		bool updated = false;
 

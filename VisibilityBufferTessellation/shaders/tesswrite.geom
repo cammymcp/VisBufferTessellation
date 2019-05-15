@@ -7,8 +7,8 @@ layout (triangle_strip, max_vertices = 3) out;
 
 layout (location = 0) in vec3 inTessCoords[];
 
-layout (location = 0) flat out uvec3 outTessCoords;
-layout (location = 1) flat out int primitiveID;
+layout (location = 0) flat out int primitiveID;
+layout (location = 1) flat out uvec3 outTessCoords;
 
 void main(void)
 {	
