@@ -10,9 +10,7 @@ This project research implements a typical visibility buffer pipeline alongside 
 In doing so, more information must be stored to the visibility buffer, and hence more bandwidth usage, but the net performance gain 
 by generating detail by tessellation may prove beneficial. 
 
-A bespoke Vulkan framework has been built from the ground up, and the two renderers built up in parallel with as much shared resources as possible. I will soon be testing the application and reporting on the results.
-
-NOTE: This project is currently in constant development and as such the code might not be in the nicest shape at any one time!
+A bespoke Vulkan framework has been built from the ground up, and the two renderers built up in parallel with as much shared resources as possible. Following the thorough testing of both pipelines, I wrote a full research paper on the project. This can be supplied on request, if you're interested!
 
 Further resources surrounding the visibility buffer and it's implementation can be found via the following resources:
 
